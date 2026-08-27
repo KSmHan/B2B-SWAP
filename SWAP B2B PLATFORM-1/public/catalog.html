@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catalog — B2B SWAP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="navRoot"></div>
+
+<main>
+  <section style="padding-bottom:0;">
+    <div class="section-head" style="text-align:left;max-width:680px;">
+      <div class="eyebrow">CATALOG</div>
+      <h2>Every surplus listing on B2B SWAP</h2>
+      <p>Browsing, searching and running AI chain searches are always free. Contact and pickup details are shown for every listing.</p>
+    </div>
+  </section>
+
+  <section style="padding-top:24px;">
+    <div class="filters">
+      <input type="text" id="fltSearch" placeholder="Search listings…" oninput="renderBrowse()">
+      <select id="fltCat" onchange="renderBrowse()">
+        <option value="">All categories</option>
+        <option value="metal">Metal &amp; Raw Materials</option>
+        <option value="plastic">Plastics &amp; Polymers</option>
+        <option value="components">Components &amp; Parts</option>
+        <option value="packaging">Packaging &amp; Containers</option>
+      </select>
+      <select id="fltPrice" onchange="renderBrowse()">
+        <option value="">Any price</option>
+        <option value="0-1500">Under $1,500</option>
+        <option value="1500-3000">$1,500 – $3,000</option>
+        <option value="3000-6000">$3,000 – $6,000</option>
+        <option value="6000-999999">$6,000+</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="fltCash" onchange="renderBrowse()"> Open to cash top-up</label>
+      <span class="count mono" id="browseCount"></span>
+    </div>
+
+    <div class="item-grid" id="itemGrid"></div>
+  </section>
+</main>
+
+<div id="footRoot"></div>
+
+<script src="app.js"></script>
+<script>
+renderNav('catalog');
+renderFooter();
+
+let debounceTimer = null;
+document.getElementById('fltSearch').addEventListener('input', ()=>{
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(renderBrowse, 250);
+});
+
+async function renderBrowse(){
+  const params = new URLSearchParams({
+    search: document.getElementById('fltSearch').value.trim(),
+    cat: document.getElementById('fltCat').value,
+    price: document.getElementById('fltPrice').value,
+    cash: document.getElementById('fltCash').checked ? '1' : '',
+  });
+  const grid = document.getElementById('itemGrid');
+  grid.innerHTML = '<p style="color:var(--text-faint);font-size:13px;">Loading listings…</p>';
+  try{
+    const data = await api('/listings?' + params.toString());
+    document.getElementById('browseCount').textContent = data.count + ' listings';
+    grid.innerHTML = data.listings.map(it=>{
+      const meta = CATS[it.cat];
+      return `<div class="item-card">
+        <div class="item-photo">
+          ${catPhoto(it.cat, it.id)}
+          <span class="cat-tag">${meta.label}</span>
+          ${it.cashOk ? `<span class="cash-tag">+ top-up ${it.cashRange}</span>` : ''}
+        </div>
+        <div class="item-body">
+          <div class="item-title">${it.title}</div>
+          ${specsBlockHTML(it)}
+          <div class="item-desc">${it.desc}</div>
+          <div class="item-wants">wants: ${it.wantsText}</div>
+          <div class="item-price-row"><span></span><b>$${Number(it.price).toLocaleString()}</b></div>
+          <div class="item-foot"><span>${it.owner}</span><span>${it.phone||''}</span></div>
+          ${pickupLineHTML(it)}
+        </div>
+      </div>`;
+    }).join('') || '<p style="color:var(--text-faint);font-size:13px;">No listings match those filters.</p>';
+  } catch(err){
+    grid.innerHTML = '<p style="color:var(--text-faint);font-size:13px;">Could not load listings — please try again.</p>';
+  }
+}
+renderBrowse();
+</script>
+</body>
+</html>

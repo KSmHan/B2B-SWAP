@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B2B SWAP — The AI That Finds the Trade Chain</title>
+<meta name="description" content="Describe your surplus inventory and what you need in return. B2B SWAP's AI agent finds a direct trade or builds a chain across companies.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="navRoot"></div>
+
+<main>
+  <section class="hero-split" style="padding-bottom:0;">
+    <div class="hero-left">
+      <h1>Surplus on the shelf — turned into <span class="hl">what you need</span></h1>
+
+      <div class="search-box">
+        <div class="search-field highlight">
+          <label>I have</label>
+          <input type="text" id="haveInput" placeholder="e.g. steel sheet, 5 tons" onkeydown="if(event.key==='Enter')document.getElementById('needInput').focus()">
+        </div>
+        <div class="search-divider"></div>
+        <div class="search-field highlight">
+          <label>I need</label>
+          <input type="text" id="needInput" placeholder="e.g. plastic pellets" onkeydown="if(event.key==='Enter')askAgent()">
+        </div>
+        <button class="btn btn-primary" onclick="askAgent()">Find matches</button>
+      </div>
+
+      <p class="hero-caption">Fill in both fields — the highlighted boxes above — in plain language.</p>
+      <div class="hero-examples">
+        <button onclick="runExample(1)">steel sheet → plastic pellets</button>
+        <button onclick="runExample(2)">ball bearings → packaging</button>
+        <button onclick="runExample(3)">pallets → metal</button>
+      </div>
+    </div>
+    <div class="hero-right">
+      <p>Need materials fast? Want to exchange, buy, or sell surplus inventory — or free up cash trapped in slow-moving stock? <b>B2B SWAP was built for exactly that.</b></p>
+      <p>Our AI agent finds a direct match or builds an exchange chain across multiple companies, helping you turn excess inventory into materials you need, new buyers, or working capital — even when no one-to-one match exists.</p>
+    </div>
+  </section>
+
+  <section style="padding-top:36px;">
+    <div class="result-panel" id="resultPanel">
+      <div class="result-answer" id="resultAnswer"></div>
+      <div class="chain-wrap" id="chainSection"></div>
+    </div>
+  </section>
+</main>
+
+<div id="footRoot"></div>
+
+<script src="app.js"></script>
+<script>
+renderNav('home');
+renderFooter();
+
+async function askAgent(){
+  const have = document.getElementById('haveInput').value.trim();
+  const need = document.getElementById('needInput').value.trim();
+
+  const panel = document.getElementById('resultPanel');
+  const answer = document.getElementById('resultAnswer');
+  const chainSection = document.getElementById('chainSection');
+  chainSection.classList.remove('show');
+  chainSection.innerHTML = '';
+  panel.classList.add('show');
+  answer.classList.add('thinking');
+  answer.textContent = 'reading your request…';
+  panel.scrollIntoView({behavior:'smooth', block:'start'});
+
+  if(!have){
+    answer.classList.remove('thinking');
+    answer.textContent = 'Fill in the "I have" field — the highlighted box above — with what you\'re looking to trade.';
+    return;
+  }
+
+  await new Promise(r=>setTimeout(r, 400));
+  answer.textContent = 'searching for a trade chain across listings (up to 10 hops)…';
+
+  try{
+    const data = await api('/agent/search', { method:'POST', body:{ have, need } });
+    answer.classList.remove('thinking');
+
+    if(data.status === 'need_more_detail'){
+      answer.textContent = data.message;
+      return;
+    }
+    if(data.status === 'no_start_match' || data.status === 'no_chain'){
+      const alt = data.suggestions && data.suggestions.length
+        ? ` Similar listings on B2B SWAP: ${data.suggestions.map(a=>`"${a.title}" (~$${a.price})`).join(', ')}.`
+        : '';
+      answer.textContent = data.message + alt;
+      return;
+    }
+
+    const path = data.chain;
+    if(path.length === 1){
+      answer.textContent = `"${path[0].title}" already matches what you're after. Estimated value: ~$${path[0].price.toLocaleString()}.`;
+    } else {
+      answer.textContent = `Found a chain with ${data.hops} hop${data.hops===1?'':'s'}: you give up "${path[0].title}" (~$${path[0].price.toLocaleString()}) → you receive "${path[path.length-1].title}" (~$${path[path.length-1].price.toLocaleString()}). Full chain below, with contacts and pickup details.`;
+    }
+    renderChainInto(chainSection, path);
+  } catch(err){
+    answer.classList.remove('thinking');
+    answer.textContent = 'Something went wrong reaching the server — please try again in a moment.';
+  }
+}
+
+function runExample(n){
+  const ex = {
+    1: ["steel sheet", "plastic pellets"],
+    2: ["ball bearings", "packaging"],
+    3: ["pallets", "metal"],
+  };
+  document.getElementById('haveInput').value = ex[n][0];
+  document.getElementById('needInput').value = ex[n][1];
+  askAgent();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Account — B2B SWAP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="navRoot"></div>
+
+<main>
+  <section>
+    <div class="section-head" style="text-align:center;max-width:680px;">
+      <div class="eyebrow">ACCOUNT</div>
+      <h2>Your B2B SWAP account</h2>
+      <p>Verify your phone once to publish listings and receive SMS and email confirmations when a trade is confirmed. Your account works the same way on any device.</p>
+    </div>
+
+    <div class="acct-shell">
+      <div id="loadingState" class="acct-card"><p class="hint" style="margin:0;">Loading your account…</p></div>
+
+      <div class="acct-card" id="stepPhone" style="display:none;">
+        <div class="acct-step-label">Step 1 of 2 — required for SMS</div>
+        <h3>Verify your phone number</h3>
+        <p class="hint">We'll send a one-time code to confirm it's you. This is the number B2B SWAP texts when a company confirms interest in a trade.</p>
+        <div class="field">
+          <label>Business phone number</label>
+          <input type="tel" id="phoneInput" placeholder="+1 (312) 555-0142">
+          <div class="field-error" id="phoneError"></div>
+        </div>
+        <button class="btn btn-primary block" id="sendCodeBtn" onclick="sendCode()">Send verification code</button>
+      </div>
+
+      <div class="acct-card" id="stepCode" style="display:none;">
+        <div class="acct-step-label">Step 1 of 2 — verify</div>
+        <h3>Enter the code</h3>
+        <p class="hint">Sent to <span id="codePhoneLabel" class="mono"></span>.</p>
+        <div class="code-hint" id="codeHint" style="display:none;"></div>
+        <div class="banner warn" id="smsWarnBanner" style="display:none;">SMS isn't connected on this server yet, so the code above was logged to the server console instead of texted. Once TWILIO_* is configured, this will be a real SMS.</div>
+        <div class="field">
+          <label>4-digit code</label>
+          <input type="text" id="codeInput" maxlength="4" placeholder="0000">
+          <div class="field-error" id="codeError"></div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-primary block" id="verifyBtn" onclick="doVerify()">Verify &amp; continue</button>
+          <button class="btn btn-ghost small" onclick="backToPhone()">Back</button>
+        </div>
+      </div>
+
+      <div class="acct-card" id="stepProfile" style="display:none;">
+        <div class="acct-step-label">Step 2 of 2 — required for email</div>
+        <h3>A few details</h3>
+        <p class="hint">Your email is where B2B SWAP sends written trade confirmations. Your company name is shown to other companies in a chain.</p>
+        <div class="field"><label>Company name</label><input type="text" id="companyInput" placeholder="e.g. Titan Alloys Co."></div>
+        <div class="field"><label>Work email</label><input type="email" id="emailInput" placeholder="you@company.com"><div class="field-error" id="profileError"></div></div>
+        <button class="btn btn-primary block" id="saveProfileBtn" onclick="saveProfile()">Save &amp; finish</button>
+      </div>
+
+      <div id="dashboard" style="display:none;">
+        <div class="acct-card" style="margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+          <div>
+            <div class="verified-badge">✓ Phone verified</div>
+            <div style="margin-top:10px;font-size:15px;color:var(--text);font-weight:700;" id="dashCompany"></div>
+            <div style="font-size:12.5px;color:var(--text-soft);margin-top:2px;" id="dashContact"></div>
+          </div>
+          <button class="btn btn-ghost small" onclick="doSignOut()">Sign out</button>
+        </div>
+
+        <div class="acct-card">
+          <div class="tabbar">
+            <button class="tabbtn active" data-tab="add" onclick="switchTab('add')">List surplus</button>
+            <button class="tabbtn" data-tab="list" onclick="switchTab('list')">My listings</button>
+            <button class="tabbtn" data-tab="notif" onclick="switchTab('notif')">Notifications</button>
+          </div>
+
+          <div class="tabpane active" id="tab-add">
+            <div class="field"><label>Item name</label><input type="text" id="fTitle" placeholder="e.g. Stainless Steel 304 Coil"></div>
+            <div class="field"><label>Category</label>
+              <select id="fCat">
+                <option value="metal">Metal &amp; Raw Materials</option>
+                <option value="plastic">Plastics &amp; Polymers</option>
+                <option value="components">Components &amp; Parts</option>
+                <option value="packaging">Packaging &amp; Containers</option>
+              </select>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Quantity</label><input type="text" id="fQty" placeholder="e.g. 500 kg"></div>
+              <div class="field"><label>Condition</label><input type="text" id="fCondition" placeholder="e.g. Surplus, unused"></div>
+            </div>
+            <div class="field"><label>Region / city</label><input type="text" id="fRegion" placeholder="e.g. Chicago, IL"></div>
+            <div class="field"><label>Pickup location</label><input type="text" id="fPickup" placeholder="e.g. Chicago, IL — Dock 3 (leave blank to reuse region)"></div>
+            <div class="field"><label>Description</label><textarea id="fDesc" placeholder="Why it's surplus, any relevant detail"></textarea></div>
+            <div class="field"><label>Estimated value, $</label><input type="number" id="fPrice" placeholder="e.g. 2500"></div>
+            <div class="field"><label>What you need in return</label><input type="text" id="fWants" placeholder="e.g. plastic pellets or packaging"></div>
+            <div class="field cash-row">
+              <label class="chk"><input type="checkbox" id="fCashOk" onchange="document.getElementById('fCashRange').disabled=!this.checked"> Open to a cash top-up</label>
+              <select id="fCashRange" disabled style="max-width:170px;">
+                <option value="$0–200">$0 – $200</option><option value="$200–500">$200 – $500</option>
+                <option value="$500–1,000">$500 – $1,000</option><option value="$1,000–2,000">$1,000 – $2,000</option>
+              </select>
+            </div>
+            <button class="btn btn-primary block" id="publishBtn" onclick="publishItem()">Publish — free</button>
+          </div>
+
+          <div class="tabpane" id="tab-list">
+            <div class="order-filters">
+              <span class="order-chip active" data-status="" onclick="setOrderFilter('')">All</span>
+              <span class="order-chip" data-status="live" onclick="setOrderFilter('live')">Live</span>
+              <span class="order-chip" data-status="chain" onclick="setOrderFilter('chain')">In a chain</span>
+              <span class="order-chip" data-status="done" onclick="setOrderFilter('done')">Completed</span>
+            </div>
+            <div id="cabList"></div>
+          </div>
+
+          <div class="tabpane" id="tab-notif">
+            <p style="font-size:13px;color:var(--text-soft);margin-bottom:18px;line-height:1.6;">These control what B2B SWAP sends you when a company confirms interest in a trade you're part of.</p>
+            <div id="notifServerStatus"></div>
+            <div class="notif-row"><div><span class="n-title">SMS trade confirmations</span><span class="n-sub" id="notifPhoneLine"></span></div></div>
+            <div class="notif-row"><div><span class="n-title">Email trade confirmations</span><span class="n-sub" id="notifEmailLine"></span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="footRoot"></div>
+
+<script src="app.js"></script>
+<script>
+renderNav('account');
+renderFooter();
+
+let currentAccount = null;
+let currentNotifications = [];
+let pendingPhone = '';
+
+async function refreshView(){
+  document.getElementById('loadingState').style.display = 'block';
+  ['stepPhone','stepCode','stepProfile','dashboard'].forEach(id=>document.getElementById(id).style.display='none');
+  try{
+    const me = await api('/auth/me');
+    currentAccount = me.account;
+    currentNotifications = me.notifications || [];
+  } catch(e){ currentAccount = null; }
+  document.getElementById('loadingState').style.display = 'none';
+
+  if(!currentAccount || !currentAccount.verified){
+    document.getElementById('stepPhone').style.display = 'block';
+  } else if(!currentAccount.company || !currentAccount.email){
+    document.getElementById('stepProfile').style.display = 'block';
+  } else {
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('dashCompany').textContent = currentAccount.company;
+    document.getElementById('dashContact').textContent = currentAccount.phone + '  ·  ' + currentAccount.email;
+    document.getElementById('notifPhoneLine').textContent = 'Sent to ' + currentAccount.phone;
+    document.getElementById('notifEmailLine').textContent = 'Sent to ' + currentAccount.email;
+    renderCabList();
+  }
+}
+
+async function sendCode(){
+  const phone = document.getElementById('phoneInput').value.trim();
+  const errEl = document.getElementById('phoneError');
+  errEl.textContent = '';
+  if(!phone){ errEl.textContent = 'Enter a phone number.'; return; }
+  const btn = document.getElementById('sendCodeBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-inline"></span>Sending…';
+  try{
+    const data = await api('/auth/request-code', { method:'POST', body:{ phone } });
+    pendingPhone = phone;
+    document.getElementById('codePhoneLabel').textContent = phone;
+    const hint = document.getElementById('codeHint');
+    const warn = document.getElementById('smsWarnBanner');
+    if(data.devCode){
+      hint.style.display = 'block';
+      hint.textContent = `Local testing mode — your code is ${data.devCode}.`;
+      warn.style.display = 'block';
+    } else {
+      hint.style.display = 'none';
+      warn.style.display = data.smsSent ? 'none' : 'block';
+    }
+    document.getElementById('stepPhone').style.display = 'none';
+    document.getElementById('stepCode').style.display = 'block';
+  } catch(e){
+    errEl.textContent = (e.data && e.data.message) || 'Could not send a code — please try again.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send verification code';
+  }
+}
+function backToPhone(){
+  document.getElementById('stepCode').style.display = 'none';
+  document.getElementById('stepPhone').style.display = 'block';
+}
+async function doVerify(){
+  const code = document.getElementById('codeInput').value.trim();
+  const errEl = document.getElementById('codeError');
+  errEl.textContent = '';
+  const btn = document.getElementById('verifyBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-inline"></span>Verifying…';
+  try{
+    await api('/auth/verify', { method:'POST', body:{ phone: pendingPhone, code } });
+    await refreshView();
+  } catch(e){
+    errEl.textContent = 'That code is incorrect or has expired. Please try again.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Verify & continue';
+  }
+}
+async function saveProfile(){
+  const company = document.getElementById('companyInput').value.trim();
+  const email = document.getElementById('emailInput').value.trim();
+  const errEl = document.getElementById('profileError');
+  errEl.textContent = '';
+  if(!company || !email){ errEl.textContent = 'Please fill in both fields.'; return; }
+  const btn = document.getElementById('saveProfileBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-inline"></span>Saving…';
+  try{
+    await api('/auth/profile', { method:'POST', body:{ company, email } });
+    toast(['A confirmation email has been sent to ' + email + ' (if email is connected on this server).']);
+    await refreshView();
+  } catch(e){
+    errEl.textContent = (e.data && e.data.error === 'invalid_email') ? 'That email address doesn\'t look right.' : 'Could not save — please try again.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save & finish';
+  }
+}
+async function doSignOut(){
+  await api('/auth/logout', { method:'POST' });
+  currentAccount = null;
+  await refreshView();
+}
+
+function switchTab(tab){
+  document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  document.querySelectorAll('.tabpane').forEach(p=>p.classList.toggle('active', p.id==='tab-'+tab));
+  if(tab==='list') renderCabList();
+  if(tab==='notif') renderNotifTab();
+}
+function renderNotifTab(){
+  const statusEl = document.getElementById('notifServerStatus');
+  const unmet = currentNotifications.filter(r=>!r.met);
+  statusEl.innerHTML = unmet.length
+    ? `<div class="banner warn">Not fully connected yet: ${unmet.map(r=>r.title.toLowerCase()).join(', ')}.</div>`
+    : `<div class="banner info">✓ Notifications are fully connected for this account.</div>`;
+}
+
+async function publishItem(){
+  const title = document.getElementById('fTitle').value.trim();
+  if(!title){ alert('Enter an item name.'); return; }
+  const btn = document.getElementById('publishBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-inline"></span>Publishing…';
+  try{
+    await api('/listings', { method:'POST', body:{
+      title,
+      cat: document.getElementById('fCat').value,
+      qty: document.getElementById('fQty').value.trim(),
+      condition: document.getElementById('fCondition').value.trim() || 'Surplus',
+      region: document.getElementById('fRegion').value.trim() || '—',
+      pickupLocation: document.getElementById('fPickup').value.trim(),
+      desc: document.getElementById('fDesc').value.trim(),
+      price: Number(document.getElementById('fPrice').value) || 0,
+      wantsText: document.getElementById('fWants').value.trim(),
+      cashOk: document.getElementById('fCashOk').checked,
+      cashRange: document.getElementById('fCashRange').value,
+    }});
+    ['fTitle','fQty','fCondition','fDesc','fPrice','fWants','fRegion','fPickup'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('fCashOk').checked = false;
+    document.getElementById('fCashRange').disabled = true;
+    switchTab('list');
+  } catch(e){
+    alert('Could not publish this listing — please try again.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Publish — free';
+  }
+}
+
+let orderFilter = '';
+function setOrderFilter(f){
+  orderFilter = f;
+  document.querySelectorAll('.order-chip').forEach(c=>c.classList.toggle('active', c.dataset.status===f));
+  renderCabList();
+}
+async function renderCabList(){
+  const wrap = document.getElementById('cabList');
+  if(!wrap) return;
+  wrap.innerHTML = '<p style="color:var(--text-faint);font-size:13px;">Loading…</p>';
+  let items;
+  try{ const data = await api('/listings/mine'); items = data.listings; }
+  catch(e){ wrap.innerHTML = '<p style="color:var(--text-faint);font-size:13px;">Could not load your listings.</p>'; return; }
+
+  const list = items.filter(it => !orderFilter || it.status===orderFilter);
+  if(items.length===0){
+    wrap.innerHTML = `<div class="empty-state">You haven't listed any surplus yet.<br>Publishing is free and takes about two minutes.<br>
+      <button class="btn btn-primary small" onclick="switchTab('add')">List surplus</button></div>`;
+    return;
+  }
+  if(list.length===0){ wrap.innerHTML = `<div class="empty-state">No listings with that status.</div>`; return; }
+
+  const badges = {live:['status-live','live'], chain:['status-chain','in a chain'], done:['status-done','completed']};
+  wrap.innerHTML = list.map(it=>{
+    const [cls,label] = badges[it.status];
+    return `<div class="order-item">
+      <div class="order-item-top">
+        <div>
+          <div class="order-item-title">${it.title}</div>
+          <div class="order-item-meta">$${Number(it.price).toLocaleString()} · wants: ${it.wantsText} · ${it.region}</div>
+        </div>
+        <span class="status-badge ${cls}">${label}</span>
+      </div>
+      <div class="order-item-actions">
+        <select onchange="changeStatus('${it.id}', this.value)">
+          <option value="live" ${it.status==='live'?'selected':''}>Live</option>
+          <option value="chain" ${it.status==='chain'?'selected':''}>In a chain</option>
+          <option value="done" ${it.status==='done'?'selected':''}>Completed</option>
+        </select>
+        <button class="link-btn" onclick="deleteItem('${it.id}')">Remove</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function changeStatus(id, status){
+  try{ await api('/listings/'+id+'/status', { method:'PATCH', body:{status} }); renderCabList(); }
+  catch(e){ alert('Could not update status.'); }
+}
+async function deleteItem(id){
+  try{ await api('/listings/'+id, { method:'DELETE' }); renderCabList(); }
+  catch(e){ alert('Could not remove listing.'); }
+}
+
+refreshView();
+</script>
+</body>
+</html>

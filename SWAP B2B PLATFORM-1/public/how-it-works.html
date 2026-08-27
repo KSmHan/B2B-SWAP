@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How It Works — B2B SWAP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="navRoot"></div>
+
+<main>
+  <section style="padding-bottom:0;">
+    <div class="section-head" style="max-width:720px;">
+      <div class="eyebrow">HOW IT WORKS</div>
+      <h2>Why companies use B2B SWAP, and exactly how a trade happens</h2>
+      <p>From the moment you list a surplus item to the moment a truck picks it up, here's what happens at each step — and what B2B SWAP needs from you to send confirmations by SMS and email.</p>
+    </div>
+  </section>
+
+  <section id="goals" style="padding-top:0;">
+    <div class="goals-grid">
+      <div class="goal-card"><div class="goal-num">01</div><h3>Clear dead stock</h3><p>Turn inventory that's sitting idle on the balance sheet into materials your business can actually use — instead of writing it off.</p></div>
+      <div class="goal-card"><div class="goal-num">02</div><h3>Get materials fast</h3><p>Close a material or component need in days, not the weeks a standard procurement and supplier lead time usually takes.</p></div>
+      <div class="goal-card"><div class="goal-num">03</div><h3>Barter — no cash needed</h3><p>Trade one surplus directly for another without touching working capital. An optional top-up can balance an uneven trade.</p></div>
+      <div class="goal-card"><div class="goal-num">04</div><h3>Unlock trapped cash</h3><p>Free up capital that's frozen in unused inventory, instead of leaving it dead weight on the warehouse floor and the books.</p></div>
+    </div>
+  </section>
+
+  <section id="process" class="border-t">
+    <div class="section-head">
+      <div class="eyebrow">THE PROCESS</div>
+      <h2>From dead stock to a matched trade</h2>
+      <p>Each step below is what actually happens on the platform — not a simplified summary.</p>
+    </div>
+    <div class="process-list">
+      <div class="process-row"><div class="process-num">01</div><div>
+        <h3>Create an account and verify your phone</h3>
+        <p>Sign up with your business phone number. We text a one-time code to confirm it's really you — this is also the number B2B SWAP will text when a trade is confirmed, so it's worth using a number your team actually checks.</p>
+      </div></div>
+      <div class="process-row"><div class="process-num">02</div><div>
+        <h3>List your surplus</h3>
+        <p>Add photos, a description, quantity, and condition. If you're open to it, set a cash range you'd accept to balance an uneven trade — this is always optional and shown right on the listing.</p>
+        <ul><li>Publishing is free, with no limit on how many items you list.</li><li>Your listing is added to the matching network immediately.</li><li>You can mark it live, in a chain, or completed at any time.</li></ul>
+      </div></div>
+      <div class="process-row"><div class="process-num">03</div><div>
+        <h3>Ask the AI agent what you need</h3>
+        <p>Fill in the two pinned fields on the home page — "I have" and "I need" — in plain language. No categories to browse and no forms. The agent reads your request, finds listings that match what you have, and works out what a fair trade path looks like.</p>
+      </div></div>
+      <div class="process-row"><div class="process-num">04</div><div>
+        <h3>The agent builds the trade chain</h3>
+        <p>Every listing on B2B SWAP is a node in a network: what a company has, and what it wants back. The agent searches that network for a path from your surplus to what you need.</p>
+        <ul><li>If one company already wants exactly what you have, it's a direct, one-step trade.</li><li>If not, the agent links listings together — up to 10 companies deep — until the chain closes and you receive what you asked for.</li><li>Every step shows technical specs, quantity, location, and where the goods can be picked up, so the whole chain is transparent before anyone commits.</li></ul>
+      </div></div>
+      <div class="process-row"><div class="process-num">05</div><div>
+        <h3>Confirm interest — and get notified</h3>
+        <p>When you're ready, confirm interest in the chain with one click. B2B SWAP sends every company in the chain an SMS and email at the same time, so nobody has to wait on a reply to know the deal is moving.</p>
+      </div></div>
+    </div>
+  </section>
+
+  <section id="example" class="border-t">
+    <div class="section-head">
+      <div class="eyebrow">WORKED EXAMPLE</div>
+      <h2>Ask, and the agent builds the trade</h2>
+      <p>Here's an actual chain the AI agent builds live, from the same API the home page uses.</p>
+    </div>
+    <div class="example-shell">
+      <div class="result-answer" id="exampleAnswer">Loading a live example…</div>
+      <div class="chain-wrap show" id="exampleChain"></div>
+    </div>
+  </section>
+
+  <section id="notify" class="border-t">
+    <div class="section-head">
+      <div class="eyebrow">NOTIFICATIONS</div>
+      <h2>What it takes to get SMS and email confirmations</h2>
+      <p>Browsing, searching, and running AI chain searches never require an account. To receive a confirmation the moment a trade is confirmed, three things need to be on file:</p>
+    </div>
+    <div class="req-shell">
+      <h3>Requirements to connect notifications</h3>
+      <p id="reqSubtitle">Complete these once in your account — it takes about a minute.</p>
+      <div class="req-list" id="reqList"></div>
+      <div style="margin-top:22px;"><a href="account.html" class="btn btn-primary small">Go to Account</a></div>
+    </div>
+  </section>
+
+  <section id="faq" class="border-t">
+    <div class="section-head"><div class="eyebrow">FAQ</div><h2>Good to know</h2></div>
+    <div class="faq">
+      <details class="faq-item" open><summary>What does it cost to join?</summary><p>Nothing. Sign-up, listing surplus, AI chain search, and contact details for every company in a chain are all free — no subscription, no hidden fees.</p></details>
+      <details class="faq-item"><summary>Is any cash involved?</summary><p>By default, no — it's a direct barter. If a company is open to a cash top-up to balance an uneven trade, that's marked on the listing. It's always optional.</p></details>
+      <details class="faq-item"><summary>How does the AI build a trade chain?</summary><p>Every listing is a node in a network: what a company has, and what it wants in return. The agent searches that network for a path from what you have to what you need — direct if possible, through up to 10 companies if that's what it takes.</p></details>
+      <details class="faq-item"><summary>What if what I need isn't listed yet?</summary><p>List your surplus and your need in your Account — it's added to the network immediately, and the agent will include it the next time anyone searches for a matching chain.</p></details>
+      <details class="faq-item"><summary>What do I need to receive SMS and email confirmations?</summary><p>A verified phone number, a work email, and your company name on file — see the Notifications section above. Without these, you can still list, search, and browse, but B2B SWAP has no way to reach you when a trade is confirmed.</p></details>
+      <details class="faq-item"><summary>Are my listings and account visible from any device?</summary><p>Yes. Accounts and listings are stored on the server, not in your browser — sign in with the same phone number from any device and you'll see the same account, the same listings, and the same trade history.</p></details>
+      <details class="faq-item"><summary>How fast can I actually get material?</summary><p>The chain itself is built in seconds. From there, speed depends on how quickly each company in the chain confirms — typically faster than a standard supplier procurement cycle.</p></details>
+    </div>
+  </section>
+</main>
+
+<div id="footRoot"></div>
+
+<script src="app.js"></script>
+<script>
+renderNav('how');
+renderFooter();
+
+(async function loadExample(){
+  const answerEl = document.getElementById('exampleAnswer');
+  try{
+    const data = await api('/agent/search', { method:'POST', body:{ have:'surplus rebar', need:'components' } });
+    if(data.status !== 'ok'){ answerEl.textContent = data.message; return; }
+    const path = data.chain;
+    answerEl.textContent = `you: "I have surplus rebar, I need components" — found a chain with ${data.hops} hop${data.hops===1?'':'s'}: you give up "${path[0].title}" (~$${path[0].price.toLocaleString()}) → you receive "${path[path.length-1].title}" (~$${path[path.length-1].price.toLocaleString()}).`;
+    renderChainInto(document.getElementById('exampleChain'), path);
+  } catch(e){
+    answerEl.textContent = 'Could not load the live example right now — the AI agent works the same way on the home page.';
+  }
+})();
+
+(async function loadRequirements(){
+  try{
+    const me = await api('/auth/me');
+    if(!me.account){
+      document.getElementById('reqSubtitle').textContent = 'You are not signed in yet — complete these once in your account.';
+      document.getElementById('reqList').innerHTML = [
+        {title:'Verify your phone number', desc:'Required so B2B SWAP can text you the moment a company in your trade chain confirms interest.'},
+        {title:'Add a work email', desc:'Required to receive an email confirmation and written summary of every confirmed trade.'},
+        {title:'Add your company name', desc:'Shown to the other companies in a chain so they know who they are trading with.'},
+      ].map(r=>`<div class="req-row"><div class="req-check"></div><div><h4>${r.title}</h4><p>${r.desc}</p></div></div>`).join('');
+      return;
+    }
+    document.getElementById('reqList').innerHTML = me.notifications.map(r=>`
+      <div class="req-row">
+        <div class="req-check" style="${r.met ? 'background:var(--good);border-color:var(--good);color:#fff;' : ''}">${r.met ? '✓' : ''}</div>
+        <div><h4>${r.title}</h4><p>${r.desc}</p></div>
+      </div>`).join('');
+  } catch(e){ /* leave defaults */ }
+})();
+</script>
+</body>
+</html>
