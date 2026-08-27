@@ -38,8 +38,8 @@
     </div>
     <div class="process-list">
       <div class="process-row"><div class="process-num">01</div><div>
-        <h3>Create an account and verify your phone</h3>
-        <p>Sign up with your business phone number. We text a one-time code to confirm it's really you — this is also the number B2B SWAP will text when a trade is confirmed, so it's worth using a number your team actually checks.</p>
+        <h3>Create an account and verify your email</h3>
+        <p>Sign up with your work email. We send a one-time code to confirm it's really you — this is also the address B2B SWAP will email when a trade is confirmed, so it's worth using an inbox your team actually checks.</p>
       </div></div>
       <div class="process-row"><div class="process-num">02</div><div>
         <h3>List your surplus</h3>
@@ -95,8 +95,8 @@
       <details class="faq-item"><summary>Is any cash involved?</summary><p>By default, no — it's a direct barter. If a company is open to a cash top-up to balance an uneven trade, that's marked on the listing. It's always optional.</p></details>
       <details class="faq-item"><summary>How does the AI build a trade chain?</summary><p>Every listing is a node in a network: what a company has, and what it wants in return. The agent searches that network for a path from what you have to what you need — direct if possible, through up to 10 companies if that's what it takes.</p></details>
       <details class="faq-item"><summary>What if what I need isn't listed yet?</summary><p>List your surplus and your need in your Account — it's added to the network immediately, and the agent will include it the next time anyone searches for a matching chain.</p></details>
-      <details class="faq-item"><summary>What do I need to receive SMS and email confirmations?</summary><p>A verified phone number, a work email, and your company name on file — see the Notifications section above. Without these, you can still list, search, and browse, but B2B SWAP has no way to reach you when a trade is confirmed.</p></details>
-      <details class="faq-item"><summary>Are my listings and account visible from any device?</summary><p>Yes. Accounts and listings are stored on the server, not in your browser — sign in with the same phone number from any device and you'll see the same account, the same listings, and the same trade history.</p></details>
+      <details class="faq-item"><summary>What do I need to receive SMS and email confirmations?</summary><p>A verified email and your company name on file are required; adding a phone number is optional and gets you a text too — see the Notifications section above. Without these, you can still list, search, and browse, but B2B SWAP has no way to reach you when a trade is confirmed.</p></details>
+      <details class="faq-item"><summary>Are my listings and account visible from any device?</summary><p>Yes. Accounts and listings are stored on the server, not in your browser — sign in with the same email from any device and you'll see the same account, the same listings, and the same trade history.</p></details>
       <details class="faq-item"><summary>How fast can I actually get material?</summary><p>The chain itself is built in seconds. From there, speed depends on how quickly each company in the chain confirms — typically faster than a standard supplier procurement cycle.</p></details>
     </div>
   </section>
@@ -128,9 +128,9 @@ renderFooter();
     if(!me.account){
       document.getElementById('reqSubtitle').textContent = 'You are not signed in yet — complete these once in your account.';
       document.getElementById('reqList').innerHTML = [
-        {title:'Verify your phone number', desc:'Required so B2B SWAP can text you the moment a company in your trade chain confirms interest.'},
-        {title:'Add a work email', desc:'Required to receive an email confirmation and written summary of every confirmed trade.'},
+        {title:'Verify your email', desc:'Required to receive an email confirmation and written summary of every confirmed trade.'},
         {title:'Add your company name', desc:'Shown to the other companies in a chain so they know who they are trading with.'},
+        {title:'Add a phone number (optional)', desc:'Add a business phone number to also get a text the moment a company in your trade chain confirms interest.'},
       ].map(r=>`<div class="req-row"><div class="req-check"></div><div><h4>${r.title}</h4><p>${r.desc}</p></div></div>`).join('');
       return;
     }

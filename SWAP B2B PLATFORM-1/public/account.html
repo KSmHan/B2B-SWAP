@@ -17,20 +17,20 @@
     <div class="section-head" style="text-align:center;max-width:680px;">
       <div class="eyebrow">ACCOUNT</div>
       <h2>Your B2B SWAP account</h2>
-      <p>Verify your phone once to publish listings and receive SMS and email confirmations when a trade is confirmed. Your account works the same way on any device.</p>
+      <p>Verify your email once to publish listings and receive email confirmations when a trade is confirmed. Your account works the same way on any device.</p>
     </div>
 
     <div class="acct-shell">
       <div id="loadingState" class="acct-card"><p class="hint" style="margin:0;">Loading your account…</p></div>
 
-      <div class="acct-card" id="stepPhone" style="display:none;">
-        <div class="acct-step-label">Step 1 of 2 — required for SMS</div>
-        <h3>Verify your phone number</h3>
-        <p class="hint">We'll send a one-time code to confirm it's you. This is the number B2B SWAP texts when a company confirms interest in a trade.</p>
+      <div class="acct-card" id="stepEmail" style="display:none;">
+        <div class="acct-step-label">Step 1 of 2 — sign in</div>
+        <h3>Verify your email</h3>
+        <p class="hint">We'll send a one-time code to confirm it's you. This is the address B2B SWAP emails when a company confirms interest in a trade.</p>
         <div class="field">
-          <label>Business phone number</label>
-          <input type="tel" id="phoneInput" placeholder="+1 (312) 555-0142">
-          <div class="field-error" id="phoneError"></div>
+          <label>Work email</label>
+          <input type="email" id="emailInput" placeholder="you@company.com">
+          <div class="field-error" id="emailError"></div>
         </div>
         <button class="btn btn-primary block" id="sendCodeBtn" onclick="sendCode()">Send verification code</button>
       </div>
@@ -38,9 +38,9 @@
       <div class="acct-card" id="stepCode" style="display:none;">
         <div class="acct-step-label">Step 1 of 2 — verify</div>
         <h3>Enter the code</h3>
-        <p class="hint">Sent to <span id="codePhoneLabel" class="mono"></span>.</p>
+        <p class="hint">Sent to <span id="codeEmailLabel" class="mono"></span>.</p>
         <div class="code-hint" id="codeHint" style="display:none;"></div>
-        <div class="banner warn" id="smsWarnBanner" style="display:none;">SMS isn't connected on this server yet, so the code above was logged to the server console instead of texted. Once TWILIO_* is configured, this will be a real SMS.</div>
+        <div class="banner warn" id="emailWarnBanner" style="display:none;">Email isn't connected on this server yet, so the code above was logged to the server console instead of sent. Once SMTP_* is configured, this will be a real email.</div>
         <div class="field">
           <label>4-digit code</label>
           <input type="text" id="codeInput" maxlength="4" placeholder="0000">
@@ -48,23 +48,23 @@
         </div>
         <div style="display:flex;gap:10px;">
           <button class="btn btn-primary block" id="verifyBtn" onclick="doVerify()">Verify &amp; continue</button>
-          <button class="btn btn-ghost small" onclick="backToPhone()">Back</button>
+          <button class="btn btn-ghost small" onclick="backToEmail()">Back</button>
         </div>
       </div>
 
       <div class="acct-card" id="stepProfile" style="display:none;">
-        <div class="acct-step-label">Step 2 of 2 — required for email</div>
+        <div class="acct-step-label">Step 2 of 2 — a few details</div>
         <h3>A few details</h3>
-        <p class="hint">Your email is where B2B SWAP sends written trade confirmations. Your company name is shown to other companies in a chain.</p>
-        <div class="field"><label>Company name</label><input type="text" id="companyInput" placeholder="e.g. Titan Alloys Co."></div>
-        <div class="field"><label>Work email</label><input type="email" id="emailInput" placeholder="you@company.com"><div class="field-error" id="profileError"></div></div>
+        <p class="hint">Your company name is shown to other companies in a chain. Adding a phone number is optional and only used to also text you trade confirmations.</p>
+        <div class="field"><label>Company name</label><input type="text" id="companyInput" placeholder="e.g. Titan Alloys Co."><div class="field-error" id="profileError"></div></div>
+        <div class="field"><label>Business phone number (optional)</label><input type="tel" id="phoneInput" placeholder="+1 (312) 555-0142"></div>
         <button class="btn btn-primary block" id="saveProfileBtn" onclick="saveProfile()">Save &amp; finish</button>
       </div>
 
       <div id="dashboard" style="display:none;">
         <div class="acct-card" style="margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
           <div>
-            <div class="verified-badge">✓ Phone verified</div>
+            <div class="verified-badge">✓ Email verified</div>
             <div style="margin-top:10px;font-size:15px;color:var(--text);font-weight:700;" id="dashCompany"></div>
             <div style="font-size:12.5px;color:var(--text-soft);margin-top:2px;" id="dashContact"></div>
           </div>
@@ -120,8 +120,8 @@
           <div class="tabpane" id="tab-notif">
             <p style="font-size:13px;color:var(--text-soft);margin-bottom:18px;line-height:1.6;">These control what B2B SWAP sends you when a company confirms interest in a trade you're part of.</p>
             <div id="notifServerStatus"></div>
-            <div class="notif-row"><div><span class="n-title">SMS trade confirmations</span><span class="n-sub" id="notifPhoneLine"></span></div></div>
             <div class="notif-row"><div><span class="n-title">Email trade confirmations</span><span class="n-sub" id="notifEmailLine"></span></div></div>
+            <div class="notif-row"><div><span class="n-title">SMS trade confirmations</span><span class="n-sub" id="notifPhoneLine"></span></div></div>
           </div>
         </div>
       </div>
@@ -138,11 +138,11 @@ renderFooter();
 
 let currentAccount = null;
 let currentNotifications = [];
-let pendingPhone = '';
+let pendingEmail = '';
 
 async function refreshView(){
   document.getElementById('loadingState').style.display = 'block';
-  ['stepPhone','stepCode','stepProfile','dashboard'].forEach(id=>document.getElementById(id).style.display='none');
+  ['stepEmail','stepCode','stepProfile','dashboard'].forEach(id=>document.getElementById(id).style.display='none');
   try{
     const me = await api('/auth/me');
     currentAccount = me.account;
@@ -151,51 +151,51 @@ async function refreshView(){
   document.getElementById('loadingState').style.display = 'none';
 
   if(!currentAccount || !currentAccount.verified){
-    document.getElementById('stepPhone').style.display = 'block';
-  } else if(!currentAccount.company || !currentAccount.email){
+    document.getElementById('stepEmail').style.display = 'block';
+  } else if(!currentAccount.company){
     document.getElementById('stepProfile').style.display = 'block';
   } else {
     document.getElementById('dashboard').style.display = 'block';
     document.getElementById('dashCompany').textContent = currentAccount.company;
-    document.getElementById('dashContact').textContent = currentAccount.phone + '  ·  ' + currentAccount.email;
-    document.getElementById('notifPhoneLine').textContent = 'Sent to ' + currentAccount.phone;
+    document.getElementById('dashContact').textContent = currentAccount.email + (currentAccount.phone ? '  ·  ' + currentAccount.phone : '');
     document.getElementById('notifEmailLine').textContent = 'Sent to ' + currentAccount.email;
+    document.getElementById('notifPhoneLine').textContent = currentAccount.phone ? 'Sent to ' + currentAccount.phone : 'Not added yet';
     renderCabList();
   }
 }
 
 async function sendCode(){
-  const phone = document.getElementById('phoneInput').value.trim();
-  const errEl = document.getElementById('phoneError');
+  const email = document.getElementById('emailInput').value.trim();
+  const errEl = document.getElementById('emailError');
   errEl.textContent = '';
-  if(!phone){ errEl.textContent = 'Enter a phone number.'; return; }
+  if(!email){ errEl.textContent = 'Enter a work email.'; return; }
   const btn = document.getElementById('sendCodeBtn');
   btn.disabled = true; btn.innerHTML = '<span class="spinner-inline"></span>Sending…';
   try{
-    const data = await api('/auth/request-code', { method:'POST', body:{ phone } });
-    pendingPhone = phone;
-    document.getElementById('codePhoneLabel').textContent = phone;
+    const data = await api('/auth/request-code', { method:'POST', body:{ email } });
+    pendingEmail = email;
+    document.getElementById('codeEmailLabel').textContent = email;
     const hint = document.getElementById('codeHint');
-    const warn = document.getElementById('smsWarnBanner');
+    const warn = document.getElementById('emailWarnBanner');
     if(data.devCode){
       hint.style.display = 'block';
       hint.textContent = `Local testing mode — your code is ${data.devCode}.`;
       warn.style.display = 'block';
     } else {
       hint.style.display = 'none';
-      warn.style.display = data.smsSent ? 'none' : 'block';
+      warn.style.display = data.emailSent ? 'none' : 'block';
     }
-    document.getElementById('stepPhone').style.display = 'none';
+    document.getElementById('stepEmail').style.display = 'none';
     document.getElementById('stepCode').style.display = 'block';
   } catch(e){
-    errEl.textContent = (e.data && e.data.message) || 'Could not send a code — please try again.';
+    errEl.textContent = (e.data && e.data.error === 'invalid_email') ? 'That email address doesn\'t look right.' : ((e.data && e.data.message) || 'Could not send a code — please try again.');
   } finally {
     btn.disabled = false; btn.textContent = 'Send verification code';
   }
 }
-function backToPhone(){
+function backToEmail(){
   document.getElementById('stepCode').style.display = 'none';
-  document.getElementById('stepPhone').style.display = 'block';
+  document.getElementById('stepEmail').style.display = 'block';
 }
 async function doVerify(){
   const code = document.getElementById('codeInput').value.trim();
@@ -204,7 +204,7 @@ async function doVerify(){
   const btn = document.getElementById('verifyBtn');
   btn.disabled = true; btn.innerHTML = '<span class="spinner-inline"></span>Verifying…';
   try{
-    await api('/auth/verify', { method:'POST', body:{ phone: pendingPhone, code } });
+    await api('/auth/verify', { method:'POST', body:{ email: pendingEmail, code } });
     await refreshView();
   } catch(e){
     errEl.textContent = 'That code is incorrect or has expired. Please try again.';
@@ -214,18 +214,17 @@ async function doVerify(){
 }
 async function saveProfile(){
   const company = document.getElementById('companyInput').value.trim();
-  const email = document.getElementById('emailInput').value.trim();
+  const phone = document.getElementById('phoneInput').value.trim();
   const errEl = document.getElementById('profileError');
   errEl.textContent = '';
-  if(!company || !email){ errEl.textContent = 'Please fill in both fields.'; return; }
+  if(!company){ errEl.textContent = 'Enter your company name.'; return; }
   const btn = document.getElementById('saveProfileBtn');
   btn.disabled = true; btn.innerHTML = '<span class="spinner-inline"></span>Saving…';
   try{
-    await api('/auth/profile', { method:'POST', body:{ company, email } });
-    toast(['A confirmation email has been sent to ' + email + ' (if email is connected on this server).']);
+    await api('/auth/profile', { method:'POST', body:{ company, phone } });
     await refreshView();
   } catch(e){
-    errEl.textContent = (e.data && e.data.error === 'invalid_email') ? 'That email address doesn\'t look right.' : 'Could not save — please try again.';
+    errEl.textContent = 'Could not save — please try again.';
   } finally {
     btn.disabled = false; btn.textContent = 'Save & finish';
   }

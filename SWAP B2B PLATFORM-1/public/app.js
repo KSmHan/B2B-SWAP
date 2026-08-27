@@ -182,7 +182,7 @@ function renderChainInto(containerEl, path) {
     <div class="chain-track">${html}</div>
     <div class="chain-actions">
       <button class="btn btn-primary small" id="startDealBtn">Confirm interest &amp; start deal</button>
-      <span class="chain-note">Notifies every company in the chain by SMS and email.</span>
+      <span class="chain-note">Notifies every company in the chain by email — and by SMS if they've added a phone number.</span>
     </div>`;
   const btn = containerEl.querySelector('#startDealBtn');
   if (btn) {
@@ -202,7 +202,7 @@ function renderChainInto(containerEl, path) {
         if (err.status === 401) {
           toast(['Log in to confirm interest in a trade.']);
         } else if (err.status === 403) {
-          toast(['Finish verifying your phone and email in Account before confirming a trade.']);
+          toast(['Finish verifying your email and adding your company name in Account before confirming a trade.']);
         } else {
           toast(['Something went wrong confirming this trade — please try again.']);
         }

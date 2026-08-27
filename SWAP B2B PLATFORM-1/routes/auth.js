@@ -3,12 +3,13 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const db = require('../db');
-const sms = require('../sms');
 const mailer = require('../mailer');
 const { issueSession, clearSession, requireAuth } = require('../auth-mw');
 const { getNotificationRequirements, accountToPublic } = require('../lib/account-helpers');
 
 const router = express.Router();
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const codeLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 8, standardHeaders: true, legacyHeaders: false,
   message: { error: 'too_many_requests', message: 'Too many code requests — please wait a few minutes.' } });
@@ -17,35 +18,36 @@ const verifyLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 15, standardHea
 
 function genCode() { return String(Math.floor(1000 + Math.random() * 9000)); }
 
-// POST /api/auth/request-code { phone }
+// POST /api/auth/request-code { email }
 router.post('/request-code', codeLimiter, async (req, res) => {
-  const phone = (req.body.phone || '').trim();
-  if (phone.length < 7) return res.status(400).json({ error: 'invalid_phone' });
+  const email = (req.body.email || '').trim();
+  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'invalid_email' });
 
   const code = genCode();
-  db.setCode(phone, code, 5 * 60 * 1000);
+  db.setCode(email, code, 5 * 60 * 1000);
 
-  const smsResult = await sms.sendSms({ to: phone, body: `Your B2B SWAP verification code is ${code}. It expires in 5 minutes.` });
+  const mailResult = await mailer.sendMail({ to: email, subject: 'Your B2B SWAP verification code',
+    text: `Your B2B SWAP verification code is ${code}. It expires in 5 minutes.` });
 
-  const payload = { ok: true, smsSent: smsResult.sent };
-  // Only ever expose the raw code outside of production, and only when SMS
+  const payload = { ok: true, emailSent: mailResult.sent };
+  // Only ever expose the raw code outside of production, and only when email
   // genuinely isn't wired up — this keeps local development usable without
-  // a Twilio account, while never leaking codes on a real deployment.
-  if (process.env.NODE_ENV !== 'production' && !smsResult.sent) {
+  // an SMTP account, while never leaking codes on a real deployment.
+  if (process.env.NODE_ENV !== 'production' && !mailResult.sent) {
     payload.devCode = code;
-    payload.devNote = 'SMS is not connected in this environment — showing the code here for local testing only.';
+    payload.devNote = 'Email is not connected in this environment — showing the code here for local testing only.';
   }
   res.json(payload);
 });
 
-// POST /api/auth/verify { phone, code }
+// POST /api/auth/verify { email, code }
 router.post('/verify', verifyLimiter, (req, res) => {
-  const phone = (req.body.phone || '').trim();
+  const email = (req.body.email || '').trim();
   const code = (req.body.code || '').trim();
-  if (!phone || !code) return res.status(400).json({ error: 'missing_fields' });
-  if (!db.checkCode(phone, code)) return res.status(400).json({ error: 'invalid_or_expired_code' });
+  if (!email || !code) return res.status(400).json({ error: 'missing_fields' });
+  if (!db.checkCode(email, code)) return res.status(400).json({ error: 'invalid_or_expired_code' });
 
-  const acc = db.upsertAccountVerified(phone);
+  const acc = db.upsertAccountVerified(email);
   issueSession(res, acc.id);
   res.json({ ok: true, account: accountToPublic(acc) });
 });
@@ -59,23 +61,13 @@ router.get('/me', (req, res) => {
   });
 });
 
-// POST /api/auth/profile { company, email }
-router.post('/profile', requireAuth, async (req, res) => {
+// POST /api/auth/profile { company, phone }
+router.post('/profile', requireAuth, (req, res) => {
   const company = (req.body.company || '').trim();
-  const email = (req.body.email || '').trim();
-  if (!company || !email) return res.status(400).json({ error: 'missing_fields' });
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'invalid_email' });
+  const phone = (req.body.phone || '').trim();
+  if (!company) return res.status(400).json({ error: 'missing_fields' });
 
-  const wasNewEmail = req.account.email !== email;
-  const acc = db.updateAccountProfile(req.account.id, { company, email });
-
-  if (wasNewEmail) {
-    await mailer.sendMail({
-      to: email,
-      subject: 'Your B2B SWAP email is connected',
-      text: `Hi ${company},\n\nThis address is now connected to your B2B SWAP account. You'll receive an email here whenever a company confirms interest in a trade with you.\n\n— B2B SWAP`,
-    });
-  }
+  const acc = db.updateAccountProfile(req.account.id, { company, phone: phone || null });
   res.json({ ok: true, account: accountToPublic(acc), notifications: getNotificationRequirements(acc) });
 });
 
