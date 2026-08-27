@@ -48,8 +48,8 @@ function requireAuth(req, res, next) {
 }
 function requireVerifiedProfile(req, res, next) {
   if (!req.account) return res.status(401).json({ error: 'not_authenticated' });
-  if (!req.account.verified) return res.status(403).json({ error: 'phone_not_verified' });
-  if (!req.account.company || !req.account.email) return res.status(403).json({ error: 'profile_incomplete' });
+  if (!req.account.verified) return res.status(403).json({ error: 'email_not_verified' });
+  if (!req.account.company) return res.status(403).json({ error: 'profile_incomplete' });
   next();
 }
 

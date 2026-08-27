@@ -14,8 +14,8 @@ This version fixes that.
 | Accounts, listings, "My listings" isolation | **Real** — stored server-side in `data/db.json`, works from any device |
 | AI matching / trade chain search | **Real** — runs server-side in `matching.js` |
 | Email notifications | **Real**, once you set `SMTP_*` in `.env` (any provider) |
-| SMS notifications | **Real**, once you set `TWILIO_*` in `.env` |
-| Phone verification codes | **Real** SMS once Twilio is configured; otherwise logged to the server console (dev/testing only) |
+| SMS notifications | **Real**, once you set `TWILIO_*` in `.env` (optional, sent only if a phone number is on file) |
+| Email verification codes (sign-in) | **Real** email once SMTP is configured; otherwise logged to the server console (dev/testing only) |
 
 Nothing needs to be "turned on" in code to go from demo to real — the
 same code path runs either way. It only depends on whether the `.env`
@@ -34,7 +34,7 @@ With no `SMTP_*`/`TWILIO_*` set, the app runs fully — you can create
 accounts, publish listings, search chains, and confirm trades. Emails/SMS
 are logged to the console instead of sent, and in `NODE_ENV=development`
 the verification code is also returned directly in the API response so
-you can log in without a real phone provider while testing locally.
+you can log in without a real email provider while testing locally.
 **`devCode` is never returned when `NODE_ENV=production`.**
 
 ## Connecting real email (recommended first — it's free/cheap and simple)
@@ -50,7 +50,7 @@ Any SMTP provider works. Easiest options:
   values in their dashboard.
 
 Once set, restart the server. `/api/health` will report
-`"emailConfigured": true`, and profile confirmations + trade
+`"emailConfigured": true`, and sign-in verification codes + trade
 notifications will actually be delivered.
 
 ## Connecting real SMS (optional)
@@ -112,7 +112,7 @@ sms.js                 Twilio wrapper (real SMS)
 auth-mw.js             JWT session cookie handling
 lib/account-helpers.js Shared account/notification-requirement helpers
 routes/
-  auth.js               /api/auth/*   — phone verification, profile, session
+  auth.js               /api/auth/*   — email verification, profile, session
   listings.js            /api/listings/* — catalog, publish, my listings
   agent.js                /api/agent/search — AI trade-chain search
   deals.js                 /api/deals/confirm — notify a trade chain
@@ -127,8 +127,7 @@ data/db.json            Created automatically on first run
   verification code in the API response) are fully disabled.
 - The app already applies `helmet`, rate limiting on `/api/*` (tighter
   on auth endpoints), and httpOnly/secure session cookies.
-- Consider adding CAPTCHA on `request-code` if you see abuse, since
-  SMS sending costs money per attempt.
+- Consider adding CAPTCHA on `request-code` if you see abuse.
 - Add a privacy policy / SMS consent language before collecting real
   phone numbers at scale — required in most jurisdictions for business
   texting (TCPA in the US).

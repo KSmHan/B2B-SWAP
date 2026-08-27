@@ -24,8 +24,8 @@ const DATA_FILE = path.join(DATA_DIR, 'db.json');
 
 function emptyState() {
   return {
-    accounts: [],       // { id, phone, email, company, verified, createdAt }
-    codes: {},          // phone -> { code, expiresAt }
+    accounts: [],       // { id, email, phone, company, verified, createdAt }
+    codes: {},          // email -> { code, expiresAt }
     listings: [],        // user-published listings (seed listings live in matching.js, not here)
     deals: [],           // log of confirmed-interest events
   };
@@ -56,20 +56,20 @@ function persist() {
 }
 
 /* ---------------- Accounts ---------------- */
-function normalizePhone(phone) {
-  return (phone || '').replace(/[^\d+]/g, '');
+function normalizeEmail(email) {
+  return (email || '').trim().toLowerCase();
 }
-function getAccountByPhone(phone) {
-  const p = normalizePhone(phone);
-  return state.accounts.find(a => normalizePhone(a.phone) === p) || null;
+function getAccountByEmail(email) {
+  const e = normalizeEmail(email);
+  return state.accounts.find(a => normalizeEmail(a.email) === e) || null;
 }
 function getAccountById(id) {
   return state.accounts.find(a => a.id === id) || null;
 }
-function upsertAccountVerified(phone) {
-  let acc = getAccountByPhone(phone);
+function upsertAccountVerified(email) {
+  let acc = getAccountByEmail(email);
   if (!acc) {
-    acc = { id: nanoid(), phone, email: null, company: null, verified: true, createdAt: Date.now() };
+    acc = { id: nanoid(), email: normalizeEmail(email), phone: null, company: null, verified: true, createdAt: Date.now() };
     state.accounts.push(acc);
   } else {
     acc.verified = true;
@@ -77,26 +77,26 @@ function upsertAccountVerified(phone) {
   persist();
   return acc;
 }
-function updateAccountProfile(id, { company, email }) {
+function updateAccountProfile(id, { company, phone }) {
   const acc = getAccountById(id);
   if (!acc) return null;
   if (company !== undefined) acc.company = company;
-  if (email !== undefined) acc.email = email;
+  if (phone !== undefined) acc.phone = phone;
   persist();
   return acc;
 }
 
 /* ---------------- Verification codes ---------------- */
-function setCode(phone, code, ttlMs) {
-  state.codes[normalizePhone(phone)] = { code, expiresAt: Date.now() + ttlMs };
+function setCode(email, code, ttlMs) {
+  state.codes[normalizeEmail(email)] = { code, expiresAt: Date.now() + ttlMs };
   persist();
 }
-function checkCode(phone, code) {
-  const entry = state.codes[normalizePhone(phone)];
+function checkCode(email, code) {
+  const entry = state.codes[normalizeEmail(email)];
   if (!entry) return false;
   if (Date.now() > entry.expiresAt) return false;
   if (entry.code !== String(code).trim()) return false;
-  delete state.codes[normalizePhone(phone)];
+  delete state.codes[normalizeEmail(email)];
   persist();
   return true;
 }
@@ -141,8 +141,8 @@ function logDeal(deal) {
 }
 
 module.exports = {
-  normalizePhone,
-  getAccountByPhone, getAccountById, upsertAccountVerified, updateAccountProfile,
+  normalizeEmail,
+  getAccountByEmail, getAccountById, upsertAccountVerified, updateAccountProfile,
   setCode, checkCode,
   allUserListings, listingsByOwner, getListingById, insertListing, updateListingStatus, deleteListing,
   logDeal,
