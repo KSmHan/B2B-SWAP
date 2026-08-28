@@ -7,10 +7,8 @@ const { requireVerifiedProfile } = require('../auth-mw');
 
 const router = express.Router();
 
-const SEED = M.buildSeedListings();
-
 async function allListings() {
-  return [...SEED, ...(await db.allUserListings())];
+  return db.allUserListings();
 }
 
 function publicListing(l) {
@@ -94,4 +92,4 @@ router.delete('/:id', requireVerifiedProfile, async (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router, allListings, publicListing, SEED };
+module.exports = { router, allListings, publicListing };
