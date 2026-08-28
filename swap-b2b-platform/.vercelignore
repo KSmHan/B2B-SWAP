@@ -1,11 +1,11 @@
-# Not required by api/[...path].js's dependency graph or the build —
+# Not required by api/index.js's dependency graph or the build —
 # safe to exclude from the deployment entirely rather than leaving them
 # publicly downloadable at their literal paths.
 supabase/
 
 # Note: server.js, server-app.js, db.js, auth-mw.js, mailer.js, sms.js,
 # matching.js, lib/, routes/, package.json, and package-lock.json are
-# NOT listed here — they're genuine dependencies of api/[...path].js
+# NOT listed here — they're genuine dependencies of api/index.js
 # (or, for the two package files, required for Vercel to install those
 # dependencies) and excluding them would break the deployed function.
 # Whether those files end up separately reachable as static assets at
