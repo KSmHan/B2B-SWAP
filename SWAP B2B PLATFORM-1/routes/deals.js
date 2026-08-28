@@ -47,7 +47,7 @@ router.post('/confirm', requireVerifiedProfile, async (req, res) => {
   const ids = Array.isArray(req.body.listingIds) ? req.body.listingIds : [];
   if (ids.length === 0) return res.status(400).json({ error: 'missing_listing_ids' });
 
-  const items = allListings();
+  const items = await allListings();
   const chain = ids.map(id => items.find(it => it.id === id)).filter(Boolean);
   if (chain.length === 0) return res.status(404).json({ error: 'chain_not_found' });
 
@@ -61,7 +61,7 @@ router.post('/confirm', requireVerifiedProfile, async (req, res) => {
     notifications.push({ listingId: listing.id, title: listing.title, owner: listing.owner, results });
   }
 
-  db.logDeal({
+  await db.logDeal({
     initiatorAccountId: req.account.id,
     initiatorCompany,
     chainListingIds: ids,

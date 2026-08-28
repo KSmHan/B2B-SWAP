@@ -9,8 +9,8 @@ const router = express.Router();
 
 const SEED = M.buildSeedListings();
 
-function allListings() {
-  return [...SEED, ...db.allUserListings()];
+async function allListings() {
+  return [...SEED, ...(await db.allUserListings())];
 }
 
 function publicListing(l) {
@@ -21,10 +21,10 @@ function publicListing(l) {
 }
 
 // GET /api/listings?search=&cat=&price=&cash=
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { search = '', cat = '', price = '', cash = '' } = req.query;
   const q = M.normalizeWord(search);
-  let list = allListings().filter(it => it.status === 'live');
+  let list = (await allListings()).filter(it => it.status === 'live');
   if (cat) list = list.filter(it => it.cat === cat);
   if (cash === '1') list = list.filter(it => it.cashOk);
   if (price) {
@@ -38,20 +38,21 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/listings/mine  (requires full, verified account)
-router.get('/mine', requireVerifiedProfile, (req, res) => {
-  const mine = db.listingsByOwner(req.account.id);
+router.get('/mine', requireVerifiedProfile, async (req, res) => {
+  const mine = await db.listingsByOwner(req.account.id);
   res.json({ listings: mine });
 });
 
 // POST /api/listings  (requires full, verified account)
-router.post('/', requireVerifiedProfile, (req, res) => {
+router.post('/', requireVerifiedProfile, async (req, res) => {
   const b = req.body || {};
   const title = (b.title || '').trim();
   if (!title) return res.status(400).json({ error: 'missing_title' });
   const cat = M.CAT_ORDER.includes(b.cat) ? b.cat : 'metal';
   const wantsText = (b.wantsText || '').trim() || 'open to offers';
   const wantTokens = M.tokenize(wantsText);
-  const wantCat = M.detectCategory(wantTokens) || M.nextCatFor(cat, db.listingsByOwner(req.account.id).length);
+  const existingCount = (await db.listingsByOwner(req.account.id)).length;
+  const wantCat = M.detectCategory(wantTokens) || M.nextCatFor(cat, existingCount);
   const qty = (b.qty || '').trim();
   const condition = (b.condition || 'Surplus').trim();
   const desc = (b.desc || '').trim();
@@ -61,7 +62,7 @@ router.post('/', requireVerifiedProfile, (req, res) => {
   const cashOk = !!b.cashOk;
   const cashRange = cashOk ? (b.cashRange || M.CASH_RANGES[0]) : null;
 
-  const listing = db.insertListing({
+  const listing = await db.insertListing({
     cat, title, qty, condition, desc, price,
     specs: M.SPEC_NOTES[cat],
     tags: M.tokenize(title + ' ' + desc + ' ' + condition),
@@ -78,17 +79,17 @@ router.post('/', requireVerifiedProfile, (req, res) => {
 });
 
 // PATCH /api/listings/:id/status  { status: 'live'|'chain'|'done' }
-router.patch('/:id/status', requireVerifiedProfile, (req, res) => {
+router.patch('/:id/status', requireVerifiedProfile, async (req, res) => {
   const status = req.body.status;
   if (!['live', 'chain', 'done'].includes(status)) return res.status(400).json({ error: 'invalid_status' });
-  const l = db.updateListingStatus(req.params.id, req.account.id, status);
+  const l = await db.updateListingStatus(req.params.id, req.account.id, status);
   if (!l) return res.status(404).json({ error: 'not_found_or_not_owner' });
   res.json({ listing: l });
 });
 
 // DELETE /api/listings/:id
-router.delete('/:id', requireVerifiedProfile, (req, res) => {
-  const ok = db.deleteListing(req.params.id, req.account.id);
+router.delete('/:id', requireVerifiedProfile, async (req, res) => {
+  const ok = await db.deleteListing(req.params.id, req.account.id);
   if (!ok) return res.status(404).json({ error: 'not_found_or_not_owner' });
   res.json({ ok: true });
 });

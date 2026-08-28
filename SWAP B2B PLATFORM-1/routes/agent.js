@@ -7,7 +7,7 @@ const { allListings, publicListing } = require('./listings');
 const router = express.Router();
 
 // POST /api/agent/search { have, need }
-router.post('/search', (req, res) => {
+router.post('/search', async (req, res) => {
   const have = (req.body.have || '').trim();
   const need = (req.body.need || '').trim();
   const haveTokens = M.tokenize(have);
@@ -17,7 +17,7 @@ router.post('/search', (req, res) => {
     return res.json({ status: 'need_more_detail', message: 'Tell the agent what you have — a few words is enough.' });
   }
 
-  const items = allListings();
+  const items = await allListings();
   const candidates = M.findStartCandidates(items, haveTokens);
   if (candidates.length === 0) {
     const alt = M.suggestSimilar(items, wantTokens.length ? wantTokens : haveTokens);

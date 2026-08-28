@@ -1,143 +1,177 @@
 /* =====================================================================
    B2B SWAP — persistence layer
 
-   This is a small file-backed JSON store. It is real, server-side,
-   shared storage — unlike the previous browser-localStorage prototype,
-   every account and listing here lives on the server and is visible
-   from any device, for any user, the moment it's created.
-
-   For a small-to-mid size deployment this is sufficient (writes are
-   synchronous and queued, so concurrent requests can't corrupt the
-   file). For higher traffic, swap this module for Postgres/MySQL —
-   every other file only talks to the functions exported here, so the
-   rest of the app does not need to change.
+   Backed by Supabase/Postgres (see supabase/schema.sql) instead of a
+   local file — a Vercel serverless function has no reliable, shared
+   filesystem to persist accounts, verification codes, listings, or
+   deals across invocations. Every other file only talks to the
+   functions exported here, so the rest of the app does not need to
+   change beyond awaiting these calls.
    ===================================================================== */
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
 const { customAlphabet } = require('nanoid');
+const supabase = require('./lib/supabase');
 
 const nanoid = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 12);
-const DATA_DIR = path.join(__dirname, 'data');
-const DATA_FILE = path.join(DATA_DIR, 'db.json');
 
-function emptyState() {
+/* ---------------- Row <-> app-object mapping ----------------
+   The rest of the app (routes, matching.js's seed listings, the
+   frontend) uses the same camelCase field names it always has —
+   these mappings are the only place that knows about the DB's
+   snake_case columns. */
+function rowToAccount(r) {
+  if (!r) return null;
   return {
-    accounts: [],       // { id, email, phone, company, verified, createdAt }
-    codes: {},          // email -> { code, expiresAt }
-    listings: [],        // user-published listings (seed listings live in matching.js, not here)
-    deals: [],           // log of confirmed-interest events
+    id: r.id, email: r.email, phone: r.phone, company: r.company, verified: r.verified,
+    createdAt: r.created_at ? new Date(r.created_at).getTime() : undefined,
   };
 }
-
-function load() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(emptyState(), null, 2));
-  }
-  try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-  } catch (e) {
-    console.error('[db] failed to read data file, starting fresh:', e.message);
-    return emptyState();
-  }
+function listingToRow(l) {
+  return {
+    id: l.id, cat: l.cat, title: l.title, qty: l.qty, condition: l.condition,
+    description: l.desc, price: l.price, specs: l.specs, tags: l.tags,
+    wants_text: l.wantsText, want_tokens: l.wantTokens, want_cat: l.wantCat,
+    owner: l.owner, phone: l.phone, email: l.email, region: l.region,
+    pickup_location: l.pickupLocation, cash_ok: l.cashOk, cash_range: l.cashRange,
+    status: l.status, owner_account_id: l.ownerAccountId, is_seed: !!l.isSeed,
+  };
 }
-
-let state = load();
-let writeQueued = false;
-function persist() {
-  if (writeQueued) return;
-  writeQueued = true;
-  setImmediate(() => {
-    writeQueued = false;
-    fs.writeFileSync(DATA_FILE, JSON.stringify(state, null, 2));
-  });
+function rowToListing(r) {
+  if (!r) return null;
+  return {
+    id: r.id, cat: r.cat, title: r.title, qty: r.qty, condition: r.condition,
+    desc: r.description, price: r.price, specs: r.specs, tags: r.tags,
+    wantsText: r.wants_text, wantTokens: r.want_tokens, wantCat: r.want_cat,
+    owner: r.owner, phone: r.phone, email: r.email, region: r.region,
+    pickupLocation: r.pickup_location, cashOk: r.cash_ok, cashRange: r.cash_range,
+    status: r.status, ownerAccountId: r.owner_account_id, isSeed: r.is_seed,
+    createdAt: r.created_at ? new Date(r.created_at).getTime() : undefined,
+  };
+}
+function rowToDeal(r) {
+  if (!r) return null;
+  return {
+    id: r.id, initiatorAccountId: r.initiator_account_id, initiatorCompany: r.initiator_company,
+    chainListingIds: r.chain_listing_ids,
+    createdAt: r.created_at ? new Date(r.created_at).getTime() : undefined,
+  };
 }
 
 /* ---------------- Accounts ---------------- */
 function normalizeEmail(email) {
   return (email || '').trim().toLowerCase();
 }
-function getAccountByEmail(email) {
+async function getAccountByEmail(email) {
+  const { data, error } = await supabase.from('accounts').select('*').eq('email', normalizeEmail(email)).maybeSingle();
+  if (error) throw new Error(`[db] getAccountByEmail failed: ${error.message}`);
+  return rowToAccount(data);
+}
+async function getAccountById(id) {
+  if (!id) return null;
+  const { data, error } = await supabase.from('accounts').select('*').eq('id', id).maybeSingle();
+  if (error) throw new Error(`[db] getAccountById failed: ${error.message}`);
+  return rowToAccount(data);
+}
+async function upsertAccountVerified(email) {
   const e = normalizeEmail(email);
-  return state.accounts.find(a => normalizeEmail(a.email) === e) || null;
+
+  // Atomic against two concurrent first-time verifies for the same new
+  // email: ON CONFLICT (email) DO NOTHING is enforced by Postgres itself,
+  // not a check-then-write in application code, so at most one concurrent
+  // caller ever actually inserts. phone/company are deliberately omitted
+  // (left to their NULL default) rather than set to null explicitly,
+  // since ignoreDuplicates never touches an existing row's columns at
+  // all on conflict — there's nothing to accidentally overwrite.
+  const { data: inserted, error: insertError } = await supabase.from('accounts')
+    .upsert({ id: nanoid(), email: e, verified: true }, { onConflict: 'email', ignoreDuplicates: true })
+    .select();
+  if (insertError) throw new Error(`[db] upsertAccountVerified insert failed: ${insertError.message}`);
+  if (inserted && inserted.length > 0) return rowToAccount(inserted[0]);
+
+  // Email already had an account — every caller in that case (including
+  // the loser of the race above, if any) lands here and only ever
+  // touches `verified`, never id/phone/company.
+  const { data, error } = await supabase.from('accounts').update({ verified: true }).eq('email', e).select().single();
+  if (error) throw new Error(`[db] upsertAccountVerified update failed: ${error.message}`);
+  return rowToAccount(data);
 }
-function getAccountById(id) {
-  return state.accounts.find(a => a.id === id) || null;
-}
-function upsertAccountVerified(email) {
-  let acc = getAccountByEmail(email);
-  if (!acc) {
-    acc = { id: nanoid(), email: normalizeEmail(email), phone: null, company: null, verified: true, createdAt: Date.now() };
-    state.accounts.push(acc);
-  } else {
-    acc.verified = true;
-  }
-  persist();
-  return acc;
-}
-function updateAccountProfile(id, { company, phone }) {
-  const acc = getAccountById(id);
-  if (!acc) return null;
-  if (company !== undefined) acc.company = company;
-  if (phone !== undefined) acc.phone = phone;
-  persist();
-  return acc;
+async function updateAccountProfile(id, { company, phone }) {
+  const patch = {};
+  if (company !== undefined) patch.company = company;
+  if (phone !== undefined) patch.phone = phone;
+  if (Object.keys(patch).length === 0) return getAccountById(id);
+
+  const { data, error } = await supabase.from('accounts').update(patch).eq('id', id).select().maybeSingle();
+  if (error) throw new Error(`[db] updateAccountProfile failed: ${error.message}`);
+  return rowToAccount(data);
 }
 
 /* ---------------- Verification codes ---------------- */
-function setCode(email, code, ttlMs) {
-  state.codes[normalizeEmail(email)] = { code, expiresAt: Date.now() + ttlMs };
-  persist();
+async function setCode(email, code, ttlMs) {
+  const row = { email: normalizeEmail(email), code, expires_at: new Date(Date.now() + ttlMs).toISOString() };
+  const { error } = await supabase.from('verification_codes').upsert(row, { onConflict: 'email' });
+  if (error) throw new Error(`[db] setCode failed: ${error.message}`);
 }
-function checkCode(email, code) {
-  const entry = state.codes[normalizeEmail(email)];
-  if (!entry) return false;
-  if (Date.now() > entry.expiresAt) return false;
-  if (entry.code !== String(code).trim()) return false;
-  delete state.codes[normalizeEmail(email)];
-  persist();
+async function checkCode(email, code) {
+  const e = normalizeEmail(email);
+  const { data, error } = await supabase.from('verification_codes').select('*').eq('email', e).maybeSingle();
+  if (error) throw new Error(`[db] checkCode failed: ${error.message}`);
+  if (!data) return false;
+  if (Date.now() > new Date(data.expires_at).getTime()) return false;
+  if (data.code !== String(code).trim()) return false;
+
+  const { error: delError } = await supabase.from('verification_codes').delete().eq('email', e);
+  if (delError) throw new Error(`[db] checkCode cleanup failed: ${delError.message}`);
   return true;
 }
 
 /* ---------------- Listings (user-published only) ---------------- */
-function allUserListings() {
-  return state.listings;
+async function allUserListings() {
+  const { data, error } = await supabase.from('listings').select('*');
+  if (error) throw new Error(`[db] allUserListings failed: ${error.message}`);
+  return (data || []).map(rowToListing);
 }
-function listingsByOwner(accountId) {
-  return state.listings.filter(l => l.ownerAccountId === accountId);
+async function listingsByOwner(accountId) {
+  const { data, error } = await supabase.from('listings').select('*').eq('owner_account_id', accountId);
+  if (error) throw new Error(`[db] listingsByOwner failed: ${error.message}`);
+  return (data || []).map(rowToListing);
 }
-function getListingById(id) {
-  return state.listings.find(l => l.id === id) || null;
+async function getListingById(id) {
+  const { data, error } = await supabase.from('listings').select('*').eq('id', id).maybeSingle();
+  if (error) throw new Error(`[db] getListingById failed: ${error.message}`);
+  return rowToListing(data);
 }
-function insertListing(listing) {
-  const row = Object.assign({ id: 'u-' + nanoid(), createdAt: Date.now(), isSeed: false }, listing);
-  state.listings.push(row);
-  persist();
-  return row;
+async function insertListing(listing) {
+  const row = listingToRow(Object.assign({ id: 'u-' + nanoid(), isSeed: false }, listing));
+  const { data, error } = await supabase.from('listings').insert(row).select().single();
+  if (error) throw new Error(`[db] insertListing failed: ${error.message}`);
+  return rowToListing(data);
 }
-function updateListingStatus(id, ownerAccountId, status) {
-  const l = getListingById(id);
-  if (!l || l.ownerAccountId !== ownerAccountId) return null;
-  l.status = status;
-  persist();
-  return l;
+async function updateListingStatus(id, ownerAccountId, status) {
+  const { data, error } = await supabase.from('listings')
+    .update({ status }).eq('id', id).eq('owner_account_id', ownerAccountId).select().maybeSingle();
+  if (error) throw new Error(`[db] updateListingStatus failed: ${error.message}`);
+  return rowToListing(data);
 }
-function deleteListing(id, ownerAccountId) {
-  const idx = state.listings.findIndex(l => l.id === id && l.ownerAccountId === ownerAccountId);
-  if (idx === -1) return false;
-  state.listings.splice(idx, 1);
-  persist();
-  return true;
+async function deleteListing(id, ownerAccountId) {
+  const { data, error } = await supabase.from('listings')
+    .delete().eq('id', id).eq('owner_account_id', ownerAccountId).select();
+  if (error) throw new Error(`[db] deleteListing failed: ${error.message}`);
+  return !!(data && data.length);
 }
 
 /* ---------------- Deals log ---------------- */
-function logDeal(deal) {
-  const row = Object.assign({ id: nanoid(), createdAt: Date.now() }, deal);
-  state.deals.push(row);
-  persist();
-  return row;
+async function logDeal(deal) {
+  const row = {
+    id: nanoid(),
+    initiator_account_id: deal.initiatorAccountId,
+    initiator_company: deal.initiatorCompany,
+    chain_listing_ids: deal.chainListingIds,
+  };
+  const { data, error } = await supabase.from('deals').insert(row).select().single();
+  if (error) throw new Error(`[db] logDeal failed: ${error.message}`);
+  return rowToDeal(data);
 }
 
 module.exports = {

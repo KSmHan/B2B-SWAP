@@ -27,12 +27,12 @@ function clearSession(res) {
 
 /** Attaches req.account if a valid session cookie is present. Never blocks
  *  the request — routes that require login check req.account themselves. */
-function attachAccount(req, res, next) {
+async function attachAccount(req, res, next) {
   const token = req.cookies && req.cookies[COOKIE_NAME];
   if (token) {
     try {
       const payload = jwt.verify(token, SECRET || 'dev-only-insecure-secret');
-      req.account = db.getAccountById(payload.aid) || null;
+      req.account = (await db.getAccountById(payload.aid)) || null;
     } catch (e) {
       req.account = null;
     }
