@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/", "destination": "/public/index.html" },
+    { "source": "/index.html", "destination": "/public/index.html" },
+    { "source": "/catalog.html", "destination": "/public/catalog.html" },
+    { "source": "/account.html", "destination": "/public/account.html" },
+    { "source": "/how-it-works.html", "destination": "/public/how-it-works.html" },
+    { "source": "/app.js", "destination": "/public/app.js" },
+    { "source": "/styles.css", "destination": "/public/styles.css" }
+  ]
+}

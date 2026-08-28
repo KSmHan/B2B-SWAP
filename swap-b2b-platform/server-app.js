@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const path = require('path');
 const express = require('express');
+require('express-async-errors'); // Express 4 doesn't forward a rejected promise from an async handler to the error middleware on its own — this patches it to do so, now that db.js's Supabase calls are async.
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -16,7 +17,7 @@ const agentRoutes = require('./routes/agent');
 const dealsRoutes = require('./routes/deals');
 
 const app = express();
-app.set('trust proxy', 1); // needed behind Render/Railway/Heroku-style proxies for correct client IPs & secure cookies
+app.set('trust proxy', 1); // needed behind Render/Railway/Heroku/Vercel-style proxies for correct client IPs & secure cookies
 
 app.use(helmet({
   contentSecurityPolicy: false, // the frontend is plain HTML/CSS/JS served from this same origin; enable/tune CSP once your asset list is final
@@ -42,9 +43,14 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Static frontend + page routes — only reached in local dev. On Vercel these
+// paths are served directly from public/ via vercel.json rewrites, so a
+// request never reaches this app for them (and this file is named
+// server-app.js, not app.js, specifically so it can never collide with
+// the actual frontend script at public/app.js); kept here so `npm start`
+// still serves the full site unchanged.
 app.use(express.static(path.join(__dirname, 'public')));
 
-// SPA-ish fallback for the four static pages (direct links, refreshes, etc.)
 app.get(['/', '/index.html'], (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/how-it-works.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'how-it-works.html')));
 app.get('/catalog.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'catalog.html')));
@@ -55,9 +61,4 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'internal_error' });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`B2B SWAP server listening on port ${PORT} (${process.env.NODE_ENV || 'development'})`);
-  if (!require('./mailer').isConfigured) console.warn('  → email notifications are DISABLED until SMTP_* is set in .env');
-  if (!require('./sms').isConfigured) console.warn('  → SMS notifications are DISABLED until TWILIO_* is set in .env');
-});
+module.exports = app;

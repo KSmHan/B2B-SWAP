@@ -24,7 +24,7 @@ router.post('/request-code', codeLimiter, async (req, res) => {
   if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'invalid_email' });
 
   const code = genCode();
-  db.setCode(email, code, 5 * 60 * 1000);
+  await db.setCode(email, code, 5 * 60 * 1000);
 
   const mailResult = await mailer.sendMail({ to: email, subject: 'Your B2B SWAP verification code',
     text: `Your B2B SWAP verification code is ${code}. It expires in 5 minutes.` });
@@ -41,13 +41,13 @@ router.post('/request-code', codeLimiter, async (req, res) => {
 });
 
 // POST /api/auth/verify { email, code }
-router.post('/verify', verifyLimiter, (req, res) => {
+router.post('/verify', verifyLimiter, async (req, res) => {
   const email = (req.body.email || '').trim();
   const code = (req.body.code || '').trim();
   if (!email || !code) return res.status(400).json({ error: 'missing_fields' });
-  if (!db.checkCode(email, code)) return res.status(400).json({ error: 'invalid_or_expired_code' });
+  if (!(await db.checkCode(email, code))) return res.status(400).json({ error: 'invalid_or_expired_code' });
 
-  const acc = db.upsertAccountVerified(email);
+  const acc = await db.upsertAccountVerified(email);
   issueSession(res, acc.id);
   res.json({ ok: true, account: accountToPublic(acc) });
 });
@@ -62,12 +62,12 @@ router.get('/me', (req, res) => {
 });
 
 // POST /api/auth/profile { company, phone }
-router.post('/profile', requireAuth, (req, res) => {
+router.post('/profile', requireAuth, async (req, res) => {
   const company = (req.body.company || '').trim();
   const phone = (req.body.phone || '').trim();
   if (!company) return res.status(400).json({ error: 'missing_fields' });
 
-  const acc = db.updateAccountProfile(req.account.id, { company, phone: phone || null });
+  const acc = await db.updateAccountProfile(req.account.id, { company, phone: phone || null });
   res.json({ ok: true, account: accountToPublic(acc), notifications: getNotificationRequirements(acc) });
 });
 
