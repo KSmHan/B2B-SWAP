@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<title>Stock list — B2B SWAP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="navRoot"></div>
+
+<main>
+  <section id="root"><div class="list-empty">Loading…</div></section>
+</main>
+
+<div id="footRoot"></div>
+
+<script src="app.js"></script>
+<script>
+renderNav('materials');
+renderFooter();
+
+const params = new URLSearchParams(location.search);
+const cardId = params.get('id') || '';
+const manageKey = params.get('key') || '';
+let card = null, items = [], filterCat = '';
+
+function header(){
+  const telHref = (card.phone || '').replace(/[^\d+]/g, '');
+  const date = card.createdAt ? new Date(card.createdAt).toLocaleDateString() : '';
+  return `
+  ${manageKey ? `<div class="owner-bar">
+      <span><b>You're managing this card.</b> Upload more stock or fix any material below — changes save instantly.</span>
+      <span class="owner-actions">
+        <label class="btn btn-primary small" for="addFileInput">⬆ Upload file</label>
+        <input type="file" id="addFileInput" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt,.docx,.doc,.rtf,.pdf" hidden>
+        <button class="btn btn-danger small" id="delBtn">Remove this stock list</button>
+      </span>
+    </div>
+    <div class="owner-upload" id="ownerUpload" hidden>
+      <div class="ou-file"><span class="ou-icon">✓</span><div><b id="ouName"></b><div class="ou-sub" id="ouSize"></div></div></div>
+      <div class="ou-modes">
+        <label class="ou-mode"><input type="radio" name="ouMode" value="append" checked> <span><b>Add to my list</b><br>Keep the ${plural(card.itemCount, 'current item')} and add the new ones.</span></label>
+        <label class="ou-mode"><input type="radio" name="ouMode" value="replace"> <span><b>Replace my list</b><br>Remove the current items and files, keep only this file.</span></label>
+      </div>
+      <div class="field-error" id="ouError"></div>
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn btn-primary" id="ouSubmit">Upload and sort by material</button>
+        <button class="btn btn-ghost" id="ouCancel">Cancel</button>
+      </div>
+    </div>` : ''}
+  <div class="card-head">
+    <div>
+      <div class="section-head" style="margin:0;"><div class="eyebrow">STOCK LIST</div></div>
+      <h1>${esc(card.company)}</h1>
+      <div class="sub">${plural(card.itemCount, 'item')}${date ? ' · added ' + esc(date) : ''}</div>
+      ${filesList()}
+    </div>
+    <div class="contact-box">
+      <div class="lbl">Contact</div>
+      <div><b>${esc(card.contactName)}</b></div>
+      <div><a href="tel:${esc(telHref)}">${esc(card.phone)}</a></div>
+      <div><a href="mailto:${esc(card.email)}?subject=${encodeURIComponent('Your stock list on B2B SWAP')}">${esc(card.email)}</a></div>
+    </div>
+  </div>`;
+}
+
+function filesList(){
+  const files = (card.files || []).map((f, i) => ({ f, i })).filter(x => x.f.hasOwnProperty('name'));
+  if (!card.hasFile || !files.length) return '';
+  return `<div class="file-list">${files.map(({ f, i }) =>
+    `<a class="file-chip" href="/api/cards/${encodeURIComponent(card.id)}/file?n=${i}" title="Download">
+      <span class="fc-ext">${esc(((f.name || '').split('.').pop() || '').toUpperCase().slice(0, 4))}</span>
+      <span>${esc(f.name)}${f.items !== undefined ? ` <span class="fc-n">· ${plural(f.items, 'item')}</span>` : ''}</span>
+    </a>`).join('')}</div>`;
+}
+
+function chips(){
+  const counts = {};
+  items.forEach(it=>{ counts[it.category] = (counts[it.category]||0) + 1; });
+  const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  return `<div class="cat-toolbar"><div class="mat-chips">
+    <button class="mat-chip ${filterCat?'':'active'}" data-cat="">All <span class="n">${items.length}</span></button>
+    ${entries.map(([k,n])=>`<button class="mat-chip ${filterCat===k?'active':''}" data-cat="${esc(k)}">${esc(materialInfo(k).label)} <span class="n">${n}</span></button>`).join('')}
+  </div></div>`;
+}
+
+function categorySelect(it){
+  return `<select data-item="${esc(it.id)}" aria-label="Material">${(_materials||[]).map(m=>
+    `<option value="${esc(m.key)}" ${m.key===it.category?'selected':''}>${esc(m.label)}</option>`).join('')}</select>`;
+}
+
+function rows(){
+  const list = items.filter(it=>!filterCat || it.category===filterCat);
+  return `<div class="stock-list">
+    <div class="stock-row no-co head"><div>Material</div><div>Item</div><div>Quantity</div><div>Price</div></div>
+    ${list.map(it=>`<div class="stock-row no-co">
+      <div class="m">${manageKey ? categorySelect(it) : materialTag(it.category)}</div>
+      <div class="ti"><div class="t">${esc(it.title)}</div>${it.specs ? `<div class="s">${esc(it.specs)}</div>` : ''}</div>
+      <div class="q">${esc(qtyText(it))}</div>
+      <div class="p">${esc(it.price || '')}</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function render(){
+  const root = document.getElementById('root');
+  root.innerHTML = header() + chips() + rows();
+  root.querySelectorAll('.mat-chip').forEach(b=>b.onclick = ()=>{ filterCat = b.dataset.cat; render(); });
+  root.querySelectorAll('select[data-item]').forEach(sel=>sel.onchange = async ()=>{
+    const it = items.find(x=>String(x.id)===sel.dataset.item);
+    const prev = it.category;
+    try{
+      await fetch(`/api/cards/${encodeURIComponent(card.id)}/items/${encodeURIComponent(it.id)}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json','X-Manage-Key':manageKey},
+        body: JSON.stringify({category: sel.value}),
+      }).then(r=>{ if(!r.ok) throw new Error(r.status); });
+      it.category = sel.value;
+      toast(`Moved to ${materialInfo(sel.value).label}.`);
+      render();
+    }catch(e){ sel.value = prev; toast('Could not save — is this your manage link?'); }
+  });
+  const addInput = document.getElementById('addFileInput');
+  if (addInput) {
+    const panel = document.getElementById('ownerUpload');
+    const err = document.getElementById('ouError');
+    const OK_EXT = ['xlsx','xls','xlsm','ods','csv','tsv','txt','docx','doc','rtf','pdf'];
+    addInput.onchange = () => {
+      const f = addInput.files[0];
+      if (!f) return;
+      err.textContent = '';
+      document.getElementById('ouName').textContent = f.name;
+      document.getElementById('ouSize').textContent = (f.size > 1048576 ? (f.size/1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(f.size/1024)) + ' KB');
+      const ext = (f.name.split('.').pop() || '').toLowerCase();
+      if (!OK_EXT.includes(ext)) err.textContent = 'This file type isn\'t supported. Upload Excel, CSV, Word or PDF.';
+      else if (f.size > 4*1024*1024) err.textContent = 'This file is larger than 4 MB.';
+      panel.hidden = false;
+      panel.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    };
+    document.getElementById('ouCancel').onclick = () => { addInput.value = ''; panel.hidden = true; };
+    document.getElementById('ouSubmit').onclick = async () => {
+      const f = addInput.files[0];
+      if (!f || err.textContent) return;
+      const mode = panel.querySelector('input[name=ouMode]:checked').value;
+      if (mode === 'replace' && !confirm(`Replace all ${card.itemCount} current items with the contents of ${f.name}?`)) return;
+      const btn = document.getElementById('ouSubmit');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner-inline"></span>Reading your file…';
+      const fd = new FormData(); fd.append('mode', mode); fd.append('file', f);
+      let res, data = null;
+      try {
+        res = await fetch(`/api/cards/${encodeURIComponent(card.id)}/files`, { method:'POST', headers:{ 'X-Manage-Key': manageKey }, body: fd });
+        try { data = await res.json(); } catch(_) {}
+      } catch(_) { res = null; }
+      if (!res || !res.ok) {
+        btn.disabled = false; btn.textContent = 'Upload and sort by material';
+        err.textContent = (data && data.fields && data.fields.file) || (data && data.message) ||
+          (res && res.status === 403 ? 'This manage link is not valid for this card.' : res && res.status === 413 ? 'The file is larger than 4 MB.' : 'Something went wrong uploading — please try again.');
+        return;
+      }
+      await load();
+      const kinds = Object.keys(data.categories || {}).length;
+      toast(`${data.replaced ? 'List replaced' : 'Added'}: ${plural(data.added, 'item')} sorted into ${plural(kinds, 'material type')}.`);
+    };
+  }
+  const del = document.getElementById('delBtn');
+  if(del) del.onclick = async ()=>{
+    if(!confirm(`Remove ${card.company}'s stock list from B2B SWAP? This can't be undone.`)) return;
+    const r = await fetch(`/api/cards/${encodeURIComponent(card.id)}`, { method:'DELETE', headers:{'X-Manage-Key':manageKey} });
+    if(r.ok){
+      root.innerHTML = `<div class="up-shell"><div class="up-card list-empty">The stock list was removed.<br><a class="btn btn-primary small" href="upload.html">Upload a new one</a></div></div>`;
+    } else toast('Could not remove — is this your manage link?');
+  };
+}
+
+async function load(){
+  const data = await api('/cards/' + encodeURIComponent(cardId));
+  card = data.card; items = data.items;
+  document.title = `${card.company} — stock list — B2B SWAP`;
+  render();
+}
+
+(async ()=>{
+  const root = document.getElementById('root');
+  try{
+    await loadMaterials();
+    await load();
+  }catch(e){
+    root.innerHTML = `<div class="up-shell"><div class="up-card list-empty">${e.status===404 ? 'This stock list doesn\'t exist or was removed.' : 'Could not load this stock list — please try again.'}<br><a class="btn btn-primary small" href="materials.html">Browse materials</a></div></div>`;
+  }
+})();
+</script>
+</body>
+</html>

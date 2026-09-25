@@ -12,3 +12,6 @@ supabase/
 # their literal paths is a real open question this .vercelignore does
 # not fully resolve — verify against a Vercel Preview deploy before
 # treating server-side source exposure as closed. See supabase/SETUP.md.
+
+# Tests and their sample stock-list files are not part of the deployed app.
+test/

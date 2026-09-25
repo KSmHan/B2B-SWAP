@@ -22,6 +22,30 @@ same code path runs either way. It only depends on whether the `.env`
 credentials are present, checked automatically at boot (see console
 output when the server starts).
 
+## Stock-list upload (no account needed)
+
+`/upload.html` lets a company publish its whole surplus stock list from **one
+file** with just a company name, a contact person, an email and a phone number.
+
+- **Formats:** Excel (`.xlsx`, `.xls`, `.ods`), CSV/TXT (UTF-8 or Windows-1251, `,` `;` or tab),
+  Word (`.docx`, `.doc`), PDF with a text layer (scanned PDFs are rejected with a clear message).
+  Max 4 MB (the Vercel Functions request limit).
+- **Automatic cataloguing:** every row is classified by material (`lib/materials.js`): aluminum,
+  copper, brass, bronze, steel, stainless, galvanized, cast iron, titanium, MDF, HDF, plywood,
+  chipboard, OSB, lumber, plastics, glass, rubber, packaging, components, cable, other metals, other.
+  Works on English and Russian lists, including alloy/grade codes (6061-T6, АМг3, AISI 304, 09Г2С, ФК…).
+  Section rows ("Aluminum", "Фанера") and sheet names carry their material to the rows below them.
+- **Pages:** `/upload.html` (form + drag-and-drop), `/materials.html` (catalogue with material chips and
+  search), `/card.html?id=…` (a company's card with contacts and the original file).
+- **Managing a card:** after upload the company gets a private manage link (also emailed if SMTP is
+  configured). On the card, that link shows an **Upload file** button: add another file's items to
+  the list, or replace the whole list with it. The same link can also fix an item's material or remove the card.
+  Every uploaded file stays downloadable from the card. Only a SHA-256 hash of the key is stored.
+- **Database:** run `supabase/002_stock_cards.sql` once in Supabase (see `supabase/SETUP.md`). Locally,
+  without Supabase env vars, cards are kept in memory so `npm start` works out of the box.
+- **Tests:** `npm test` runs parser, classifier and HTTP API tests against real sample files in
+  `test/fixtures/` (regenerate them with `npm run fixtures`, which needs LibreOffice).
+
 ## Local setup
 
 ```bash

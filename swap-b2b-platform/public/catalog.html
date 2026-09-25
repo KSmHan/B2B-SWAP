@@ -76,16 +76,16 @@ async function renderBrowse(){
       return `<div class="item-card">
         <div class="item-photo">
           ${catPhoto(it.cat, it.id)}
-          <span class="cat-tag">${meta.label}</span>
-          ${it.cashOk ? `<span class="cash-tag">+ top-up ${it.cashRange}</span>` : ''}
+          <span class="cat-tag">${esc(meta ? meta.label : it.cat)}</span>
+          ${it.cashOk ? `<span class="cash-tag">+ top-up ${esc(it.cashRange)}</span>` : ''}
         </div>
         <div class="item-body">
-          <div class="item-title">${it.title}</div>
+          <div class="item-title">${esc(it.title)}</div>
           ${specsBlockHTML(it)}
-          <div class="item-desc">${it.desc}</div>
-          <div class="item-wants">wants: ${it.wantsText}</div>
+          <div class="item-desc">${esc(it.desc)}</div>
+          <div class="item-wants">wants: ${esc(it.wantsText)}</div>
           <div class="item-price-row"><span></span><b>$${Number(it.price).toLocaleString()}</b></div>
-          <div class="item-foot"><span>${it.owner}</span><span>${it.phone||''}</span></div>
+          <div class="item-foot"><span>${esc(it.owner)}</span><span>${esc(it.phone||'')}</span></div>
           ${pickupLineHTML(it)}
         </div>
       </div>`;

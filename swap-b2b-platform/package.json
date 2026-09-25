@@ -6,12 +6,15 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "test": "node --test test/*.test.js",
+    "fixtures": "node test/fixtures/make-fixtures.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
+    "@e965/xlsx": "^0.20.3",
     "@supabase/supabase-js": "^2.45.4",
     "cookie-parser": "^1.4.6",
     "dotenv": "^16.4.5",
@@ -20,9 +23,16 @@
     "express-rate-limit": "^7.4.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
+    "mammoth": "^1.12.3",
     "morgan": "^1.10.0",
+    "multer": "^2.4.0",
     "nanoid": "^3.3.7",
     "nodemailer": "^6.9.14",
-    "twilio": "^5.2.2"
+    "pdf-parse": "^2.4.5",
+    "twilio": "^5.2.2",
+    "word-extractor": "^1.0.4"
+  },
+  "devDependencies": {
+    "docx": "^9.7.2"
   }
 }
