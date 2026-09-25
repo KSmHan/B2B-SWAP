@@ -38,7 +38,9 @@ file** with just a company name, a contact person, an email and a phone number.
 - **Pages:** `/upload.html` (form + drag-and-drop), `/materials.html` (catalogue with material chips and
   search), `/card.html?id=…` (a company's card with contacts and the original file).
 - **Managing a card:** after upload the company gets a private manage link (also emailed if SMTP is
-  configured) to correct an item's material or remove the card. Only a SHA-256 hash of that key is stored.
+  configured). On the card, that link shows an **Upload file** button: add another file's items to
+  the list, or replace the whole list with it. The same link can also fix an item's material or remove the card.
+  Every uploaded file stays downloadable from the card. Only a SHA-256 hash of the key is stored.
 - **Database:** run `supabase/002_stock_cards.sql` once in Supabase (see `supabase/SETUP.md`). Locally,
   without Supabase env vars, cards are kept in memory so `npm start` works out of the box.
 - **Tests:** `npm test` runs parser, classifier and HTTP API tests against real sample files in

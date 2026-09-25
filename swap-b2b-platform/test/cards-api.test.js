@@ -128,3 +128,52 @@ test('honeypot field silently blocks bots', async () => {
 test('unknown card → 404', async () => {
   assert.equal((await fetch(`${base}/doesnotexist`)).status, 404);
 });
+
+test('owner adds a second file (append) and replaces the list; each file stays downloadable', async () => {
+  const { body } = await post(Object.assign({}, CONTACT, { company: 'Multi File Co' }), fixture('stock-en.csv'));
+  const id = body.card.id;
+  const upload = (key, file, mode) => {
+    const fd = form(mode ? { mode } : {}, file);
+    return fetch(`${base}/${id}/files`, { method: 'POST', headers: { 'X-Manage-Key': key }, body: fd });
+  };
+
+  // Wrong key: rejected before the file is even read.
+  assert.equal((await upload('nope', fixture('stock-ru.docx'))).status, 403);
+
+  // Append a Word file: 6 + 11 items, both files listed.
+  let res = await upload(body.manageKey, fixture('stock-ru.docx'));
+  assert.equal(res.status, 201);
+  let out = await res.json();
+  assert.equal(out.added, 11);
+  assert.equal(out.card.itemCount, 17);
+  assert.deepEqual(out.card.files.map(f => [f.name, f.items]), [['stock-en.csv', 6], ['stock-ru.docx', 11]]);
+  assert.ok(out.card.files.every(f => f.path === undefined), 'storage paths are never exposed');
+  let card = await (await fetch(`${base}/${id}`)).json();
+  assert.equal(card.items.length, 17);
+  assert.equal(card.items[6].title, 'Лист алюминиевый'); // appended after the existing rows
+  assert.equal(card.card.categories.chipboard, 1);
+
+  // Each file downloads by index; default is the latest.
+  const f0 = await fetch(`${base}/${id}/file?n=0`);
+  assert.match(f0.headers.get('content-disposition'), /stock-en\.csv/);
+  const latest = await fetch(`${base}/${id}/file`);
+  assert.match(latest.headers.get('content-disposition'), /stock-ru\.docx/);
+  assert.equal((await fetch(`${base}/${id}/file?n=5`)).status, 404);
+
+  // A bad file is rejected and changes nothing.
+  res = await upload(body.manageKey, { name: 'notes.txt', data: Buffer.from('hello') });
+  assert.equal(res.status, 422);
+  assert.equal((await (await fetch(`${base}/${id}`)).json()).items.length, 17);
+
+  // Replace: only the new file's items and the new file remain.
+  res = await upload(body.manageKey, fixture('stock-ru.pdf'), 'replace');
+  out = await res.json();
+  assert.equal(res.status, 201);
+  assert.equal(out.replaced, true);
+  assert.equal(out.card.itemCount, 11);
+  assert.deepEqual(out.card.files.map(f => f.name), ['stock-ru.pdf']);
+  card = await (await fetch(`${base}/${id}`)).json();
+  assert.equal(card.items.length, 11);
+  assert.ok(!card.items.some(i => i.title === 'Aluminum sheet'));
+  assert.equal((await fetch(`${base}/${id}/file?n=1`)).status, 404);
+});

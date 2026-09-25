@@ -25,7 +25,8 @@ create table if not exists stock_cards (
   file_name          text,
   file_format        text,
   file_size          integer,
-  file_path          text,                 -- object path in the "stock-files" bucket
+  file_path          text,                 -- latest file's object path in the "stock-files" bucket
+  files              jsonb not null default '[]'::jsonb,   -- every uploaded file: [{ name, path, format, size, items, uploadedAt }]
   item_count         integer not null default 0,
   categories         jsonb not null default '{}'::jsonb,   -- { "aluminum": 12, "mdf": 3, … }
   status             text not null default 'live',
@@ -33,6 +34,8 @@ create table if not exists stock_cards (
   created_at         timestamptz not null default now()
 );
 alter table stock_cards enable row level security;
+-- For databases where an earlier version of this script already ran.
+alter table stock_cards add column if not exists files jsonb not null default '[]'::jsonb;
 create index if not exists stock_cards_status_created_idx on stock_cards (status, created_at desc);
 
 create table if not exists stock_items (

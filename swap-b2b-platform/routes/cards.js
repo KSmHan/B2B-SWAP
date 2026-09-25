@@ -8,7 +8,8 @@
    GET    /api/cards/materials               material types with live item counts
    GET    /api/cards/items?cat=&q=&offset=   catalogue items across all cards
    GET    /api/cards/:id                     one card + its items
-   GET    /api/cards/:id/file                download the original upload
+   GET    /api/cards/:id/file?n=             download uploaded file #n (default: latest)
+   POST   /api/cards/:id/files               (X-Manage-Key) multipart: file, mode=append|replace
    DELETE /api/cards/:id                     (X-Manage-Key) remove the card
    PATCH  /api/cards/:id/items/:itemId       (X-Manage-Key) { category } — fix a material
    ===================================================================== */
@@ -21,7 +22,7 @@ const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const { customAlphabet } = require('nanoid');
 
-const { parseStockFile, ParseError, ACCEPTED_EXTENSIONS } = require('../lib/stock-parser');
+const { parseStockFile, ParseError, ACCEPTED_EXTENSIONS, MAX_ITEMS } = require('../lib/stock-parser');
 const { listMaterials, isMaterial } = require('../lib/materials');
 const { getDefaultStore, publicCard } = require('../lib/cards-store');
 
@@ -50,6 +51,12 @@ function sanitizeFileName(name) {
 }
 function field(v, max) { return String(v || '').replace(/\s+/g, ' ').trim().slice(0, max); }
 
+function countCategories(items) {
+  const out = {};
+  items.forEach(it => { out[it.category] = (out[it.category] || 0) + 1; });
+  return out;
+}
+
 function createCardsRouter({ store = getDefaultStore(), mailer = require('../mailer'), uploadLimit } = {}) {
   const router = express.Router();
 
@@ -70,6 +77,42 @@ function createCardsRouter({ store = getDefaultStore(), mailer = require('../mai
       }
       return res.status(400).json({ error: 'bad_upload', message: 'Upload one file in the "file" field.' });
     });
+  }
+
+  /** Validates + parses req.file. Sends a 4xx and returns null when it can't be used. */
+  async function readStockUpload(req, res) {
+    const fileName = sanitizeFileName(req.file.originalname);
+    const ext = path.extname(fileName).slice(1).toLowerCase();
+    if (!ACCEPTED_EXTENSIONS.includes(ext)) {
+      res.status(400).json({ error: 'unsupported_type', fields: { file: 'Upload an Excel (.xlsx, .xls), CSV, Word (.docx, .doc) or PDF file.' } });
+      return null;
+    }
+    try {
+      const parsed = await parseStockFile(req.file.buffer, fileName);
+      return { fileName, ext, parsed };
+    } catch (e) {
+      if (e instanceof ParseError) res.status(422).json({ error: e.code, fields: { file: e.message } });
+      else {
+        console.error('[cards] parse failed:', e);
+        res.status(422).json({ error: 'parse_failed', fields: { file: 'We could not read this file. Try saving it as .xlsx or .csv.' } });
+      }
+      return null;
+    }
+  }
+
+  /** Keeps the original upload for download. A storage hiccup must not lose the listing itself. */
+  async function storeOriginal(cardId, upload, size, buffer) {
+    let filePath = `${cardId}/${Date.now()}.${upload.ext}`;
+    try {
+      await store.saveFile(filePath, buffer, CONTENT_TYPES[upload.parsed.format] || 'application/octet-stream');
+    } catch (e) {
+      console.error('[cards] original file not stored:', e.message);
+      filePath = null;
+    }
+    return {
+      name: upload.fileName, path: filePath, format: upload.parsed.format, size,
+      items: upload.parsed.items.length, uploadedAt: Date.now(),
+    };
   }
 
   async function requireManageKey(req, res) {
@@ -99,40 +142,18 @@ function createCardsRouter({ store = getDefaultStore(), mailer = require('../mai
     if (!req.file) errors.file = 'Attach your stock list (Excel, CSV, Word or PDF).';
     if (Object.keys(errors).length) return res.status(400).json({ error: 'invalid_fields', fields: errors });
 
-    const fileName = sanitizeFileName(req.file.originalname);
-    const ext = path.extname(fileName).slice(1).toLowerCase();
-    if (!ACCEPTED_EXTENSIONS.includes(ext)) {
-      return res.status(400).json({ error: 'unsupported_type', fields: { file: 'Upload an Excel (.xlsx, .xls), CSV, Word (.docx, .doc) or PDF file.' } });
-    }
-
-    let parsed;
-    try {
-      parsed = await parseStockFile(req.file.buffer, fileName);
-    } catch (e) {
-      if (e instanceof ParseError) return res.status(422).json({ error: e.code, fields: { file: e.message } });
-      console.error('[cards] parse failed:', e);
-      return res.status(422).json({ error: 'parse_failed', fields: { file: 'We could not read this file. Try saving it as .xlsx or .csv.' } });
-    }
+    const upload = await readStockUpload(req, res);
+    if (!upload) return;
+    const { fileName, parsed } = upload;
 
     const id = nanoid();
     const manageKey = crypto.randomBytes(24).toString('base64url');
-    const categories = {};
-    parsed.items.forEach(it => { categories[it.category] = (categories[it.category] || 0) + 1; });
-
-    // Keep the original file so buyers can download it. A storage hiccup must
-    // not lose the listing itself, so the card is still published without it.
-    let filePath = `${id}/${Date.now()}.${ext}`;
-    try {
-      await store.saveFile(filePath, req.file.buffer, CONTENT_TYPES[parsed.format] || 'application/octet-stream');
-    } catch (e) {
-      console.error('[cards] original file not stored:', e.message);
-      filePath = null;
-    }
+    const file = await storeOriginal(id, upload, req.file.size, req.file.buffer);
 
     const card = await store.createCard({
       id, company, contactName, email, phone,
-      fileName, fileFormat: parsed.format, fileSize: req.file.size, filePath,
-      categories, manageTokenHash: hashToken(manageKey),
+      fileName, fileFormat: parsed.format, fileSize: req.file.size, filePath: file.path,
+      files: [file], categories: countCategories(parsed.items), manageTokenHash: hashToken(manageKey),
     }, parsed.items);
 
     const origin = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
@@ -183,20 +204,41 @@ function createCardsRouter({ store = getDefaultStore(), mailer = require('../mai
     const card = await store.getCard(req.params.id);
     if (!card || card.status !== 'live') return res.status(404).json({ error: 'not_found' });
     const items = await store.cardItems(card.id);
-    res.json({ card: Object.assign(publicCard(card), { hasFile: !!card.filePath }), items });
+    res.json({ card: Object.assign(publicCard(card), { hasFile: card.files.some(f => f.path) }), items });
   });
 
   // GET /api/cards/:id/file
   router.get('/:id/file', async (req, res) => {
     const card = await store.getCard(req.params.id);
     if (!card || card.status !== 'live') return res.status(404).json({ error: 'not_found' });
-    const f = await store.fileDownload(card);
+    const n = req.query.n === undefined ? card.files.length - 1 : Number(req.query.n);
+    if (!Number.isInteger(n) || n < 0 || n >= card.files.length) return res.status(404).json({ error: 'file_not_available' });
+    const f = await store.fileDownload(card, n);
     if (!f) return res.status(404).json({ error: 'file_not_available' });
     if (f.url) return res.redirect(302, f.url);
     res.set('Content-Type', f.contentType || 'application/octet-stream');
-    res.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(card.fileName || 'stock-list')}`);
+    res.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(card.files[n].name || 'stock-list')}`);
     res.set('X-Content-Type-Options', 'nosniff');
     res.send(f.buffer);
+  });
+
+  // POST /api/cards/:id/files — the owner adds another stock file to the card.
+  // mode=append (default) adds its items; mode=replace swaps the whole list for it.
+  router.post('/:id/files', uploadLimiter, async (req, res, next) => {
+    const card = await requireManageKey(req, res);
+    if (card) { req.card = card; next(); }
+  }, receiveFile, async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'invalid_fields', fields: { file: 'Attach your stock list (Excel, CSV, Word or PDF).' } });
+    const replace = (req.body || {}).mode === 'replace';
+    const upload = await readStockUpload(req, res);
+    if (!upload) return;
+    const items = upload.parsed.items;
+    if (!replace && req.card.itemCount + items.length > MAX_ITEMS) {
+      return res.status(422).json({ error: 'too_many_items', fields: { file: `A card can hold up to ${MAX_ITEMS} items — this file would bring it to ${req.card.itemCount + items.length}. Use "Replace the list" instead.` } });
+    }
+    const file = await storeOriginal(req.card.id, upload, req.file.size, req.file.buffer);
+    const card = await store.addFile(req.card.id, file, items, { replace });
+    res.status(201).json({ card: publicCard(card), added: items.length, replaced: replace, categories: countCategories(items) });
   });
 
   // DELETE /api/cards/:id

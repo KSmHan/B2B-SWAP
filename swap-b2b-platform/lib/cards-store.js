@@ -14,8 +14,15 @@ const BUCKET = 'stock-files';
 
 function publicCard(c) {
   if (!c) return null;
-  const { manageTokenHash, filePath, ...rest } = c;
-  return rest;
+  const { manageTokenHash, filePath, files, ...rest } = c;
+  // Storage paths stay server-side; files are downloaded by index via /api/cards/:id/file?n=.
+  return Object.assign(rest, { files: (files || []).map(({ path, ...f }) => f) });
+}
+
+function countCategories(items) {
+  const out = {};
+  items.forEach(it => { out[it.category] = (out[it.category] || 0) + 1; });
+  return out;
 }
 
 /* ---------------- Supabase ---------------- */
@@ -25,6 +32,8 @@ function rowToCard(r) {
     id: r.id, company: r.company, contactName: r.contact_name, email: r.email, phone: r.phone,
     fileName: r.file_name, fileFormat: r.file_format, fileSize: r.file_size, filePath: r.file_path,
     itemCount: r.item_count, categories: r.categories || {}, status: r.status,
+    files: Array.isArray(r.files) && r.files.length ? r.files
+      : (r.file_path ? [{ name: r.file_name, path: r.file_path, format: r.file_format, size: r.file_size, items: r.item_count }] : []),
     manageTokenHash: r.manage_token_hash,
     createdAt: r.created_at ? new Date(r.created_at).getTime() : undefined,
   };
@@ -55,20 +64,55 @@ function createSupabaseStore(supabase) {
         id: card.id, company: card.company, contact_name: card.contactName, email: card.email, phone: card.phone,
         file_name: card.fileName, file_format: card.fileFormat, file_size: card.fileSize, file_path: card.filePath || null,
         item_count: items.length, categories: card.categories, status: 'live', manage_token_hash: card.manageTokenHash,
+        files: card.files || [],
       });
       if (error) fail('createCard', error);
+      try {
+        await this.insertItems(card.id, items, 0);
+      } catch (e) {
+        await supabase.from('stock_cards').delete().eq('id', card.id); // items cascade
+        throw e;
+      }
+      return this.getCard(card.id);
+    },
+
+    async insertItems(cardId, items, startPosition) {
       const rows = items.map((it, i) => ({
-        card_id: card.id, position: i, category: it.category, title: it.title,
+        card_id: cardId, position: startPosition + i, category: it.category, title: it.title,
         qty: it.qty || null, unit: it.unit || null, price: it.price || null, specs: it.specs || null,
       }));
       for (let i = 0; i < rows.length; i += 500) {
-        const { error: e2 } = await supabase.from('stock_items').insert(rows.slice(i, i + 500));
-        if (e2) {
-          await supabase.from('stock_cards').delete().eq('id', card.id); // items cascade
-          fail('createCard items', e2);
-        }
+        const { error } = await supabase.from('stock_items').insert(rows.slice(i, i + 500));
+        if (error) fail('insertItems', error);
       }
-      return this.getCard(card.id);
+    },
+
+    /** Owner uploads another file: its items are appended, or replace the whole list. */
+    async addFile(cardId, file, items, { replace = false } = {}) {
+      const card = await this.getCard(cardId);
+      if (!card) return null;
+      let start = 0;
+      if (replace) {
+        const { error } = await supabase.from('stock_items').delete().eq('card_id', cardId);
+        if (error) fail('addFile clear', error);
+      } else {
+        const { data, error } = await supabase.from('stock_items').select('position')
+          .eq('card_id', cardId).order('position', { ascending: false }).limit(1);
+        if (error) fail('addFile position', error);
+        start = data && data.length ? data[0].position + 1 : 0;
+      }
+      await this.insertItems(cardId, items, start);
+      const files = replace ? [file] : [...card.files, file];
+      const { error } = await supabase.from('stock_cards').update({
+        files, file_name: file.name, file_format: file.format, file_size: file.size, file_path: file.path || null,
+      }).eq('id', cardId);
+      if (error) fail('addFile card', error);
+      await this.refreshCardCategories(cardId);
+      if (replace) {
+        const old = card.files.map(f => f.path).filter(Boolean);
+        if (old.length) await supabase.storage.from(BUCKET).remove(old).catch(() => {});
+      }
+      return this.getCard(cardId);
     },
 
     async getCard(id) {
@@ -123,9 +167,7 @@ function createSupabaseStore(supabase) {
 
     async refreshCardCategories(cardId) {
       const items = await this.cardItems(cardId);
-      const categories = {};
-      items.forEach(it => { categories[it.category] = (categories[it.category] || 0) + 1; });
-      const { error } = await supabase.from('stock_cards').update({ categories, item_count: items.length }).eq('id', cardId);
+      const { error } = await supabase.from('stock_cards').update({ categories: countCategories(items), item_count: items.length }).eq('id', cardId);
       if (error) fail('refreshCardCategories', error);
     },
 
@@ -134,7 +176,8 @@ function createSupabaseStore(supabase) {
       if (!card) return false;
       const { error } = await supabase.from('stock_cards').delete().eq('id', id);
       if (error) fail('deleteCard', error);
-      if (card.filePath) await supabase.storage.from(BUCKET).remove([card.filePath]).catch(() => {});
+      const paths = card.files.map(f => f.path).filter(Boolean);
+      if (paths.length) await supabase.storage.from(BUCKET).remove(paths).catch(() => {});
       return true;
     },
 
@@ -143,11 +186,12 @@ function createSupabaseStore(supabase) {
       if (error) fail('saveFile', error);
     },
 
-    /** Returns { url } (short-lived signed link) for the original upload. */
-    async fileDownload(card) {
-      if (!card.filePath) return null;
+    /** Returns { url } (short-lived signed link) for uploaded file #n (default: the latest). */
+    async fileDownload(card, n = card.files.length - 1) {
+      const f = card.files[n];
+      if (!f || !f.path) return null;
       const { data, error } = await supabase.storage.from(BUCKET)
-        .createSignedUrl(card.filePath, 60, { download: card.fileName || true });
+        .createSignedUrl(f.path, 60, { download: f.name || true });
       if (error) fail('fileDownload', error);
       return { url: data.signedUrl };
     },
@@ -171,11 +215,28 @@ function createMemoryStore() {
     kind: 'memory',
 
     async createCard(card, list) {
-      cards.set(card.id, Object.assign({}, card, { itemCount: list.length, status: 'live', createdAt: Date.now() }));
+      cards.set(card.id, Object.assign({ files: [] }, card, { itemCount: list.length, status: 'live', createdAt: Date.now() }));
       list.forEach((it, i) => items.push(Object.assign({ id: nextItemId++, cardId: card.id, position: i }, it)));
       return this.getCard(card.id);
     },
-    async getCard(id) { const c = cards.get(id); return c ? Object.assign({}, c) : null; },
+    async getCard(id) { const c = cards.get(id); return c ? Object.assign({}, c, { files: [...c.files] }) : null; },
+    async addFile(cardId, file, list, { replace = false } = {}) {
+      const c = cards.get(cardId);
+      if (!c) return null;
+      let start = 0;
+      if (replace) {
+        for (let i = items.length - 1; i >= 0; i--) if (items[i].cardId === cardId) items.splice(i, 1);
+        c.files.forEach(f => f.path && files.delete(f.path));
+        c.files = [file];
+      } else {
+        start = items.filter(it => it.cardId === cardId).reduce((m, it) => Math.max(m, it.position + 1), 0);
+        c.files.push(file);
+      }
+      list.forEach((it, i) => items.push(Object.assign({ id: nextItemId++, cardId, position: start + i }, it)));
+      const mine = items.filter(it => it.cardId === cardId);
+      Object.assign(c, { itemCount: mine.length, categories: countCategories(mine), fileName: file.name, filePath: file.path });
+      return this.getCard(cardId);
+    },
     async cardItems(cardId) { return items.filter(it => it.cardId === cardId).map(it => Object.assign({}, it)); },
     async listCards({ limit = 12 } = {}) {
       return [...cards.values()].filter(c => c.status === 'live').sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);
@@ -197,9 +258,7 @@ function createMemoryStore() {
       const it = items.find(x => x.id === Number(itemId) && x.cardId === cardId);
       if (!it) return false;
       it.category = category;
-      const c = cards.get(cardId);
-      c.categories = {};
-      items.filter(x => x.cardId === cardId).forEach(x => { c.categories[x.category] = (c.categories[x.category] || 0) + 1; });
+      cards.get(cardId).categories = countCategories(items.filter(x => x.cardId === cardId));
       return true;
     },
     async deleteCard(id) {
@@ -207,12 +266,13 @@ function createMemoryStore() {
       if (!c) return false;
       cards.delete(id);
       for (let i = items.length - 1; i >= 0; i--) if (items[i].cardId === id) items.splice(i, 1);
-      if (c.filePath) files.delete(c.filePath);
+      c.files.forEach(f => f.path && files.delete(f.path));
       return true;
     },
     async saveFile(filePath, buffer, contentType) { files.set(filePath, { buffer, contentType }); },
-    async fileDownload(card) {
-      const f = card.filePath && files.get(card.filePath);
+    async fileDownload(card, n = card.files.length - 1) {
+      const meta = card.files[n];
+      const f = meta && meta.path && files.get(meta.path);
       return f ? { buffer: f.buffer, contentType: f.contentType } : null;
     },
   };
