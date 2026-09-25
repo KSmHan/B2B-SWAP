@@ -303,22 +303,22 @@ async function renderCabList(){
 
   const badges = {live:['status-live','live'], chain:['status-chain','in a chain'], done:['status-done','completed']};
   wrap.innerHTML = list.map(it=>{
-    const [cls,label] = badges[it.status];
+    const [cls,label] = badges[it.status] || badges.live;
     return `<div class="order-item">
       <div class="order-item-top">
         <div>
-          <div class="order-item-title">${it.title}</div>
-          <div class="order-item-meta">$${Number(it.price).toLocaleString()} · wants: ${it.wantsText} · ${it.region}</div>
+          <div class="order-item-title">${esc(it.title)}</div>
+          <div class="order-item-meta">$${Number(it.price).toLocaleString()} · wants: ${esc(it.wantsText)} · ${esc(it.region)}</div>
         </div>
         <span class="status-badge ${cls}">${label}</span>
       </div>
       <div class="order-item-actions">
-        <select onchange="changeStatus('${it.id}', this.value)">
+        <select data-id="${esc(it.id)}" onchange="changeStatus(this.dataset.id, this.value)">
           <option value="live" ${it.status==='live'?'selected':''}>Live</option>
           <option value="chain" ${it.status==='chain'?'selected':''}>In a chain</option>
           <option value="done" ${it.status==='done'?'selected':''}>Completed</option>
         </select>
-        <button class="link-btn" onclick="deleteItem('${it.id}')">Remove</button>
+        <button class="link-btn" data-id="${esc(it.id)}" onclick="deleteItem(this.dataset.id)">Remove</button>
       </div>
     </div>`;
   }).join('');

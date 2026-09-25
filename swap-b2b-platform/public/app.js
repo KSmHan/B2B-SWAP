@@ -32,8 +32,8 @@ const CATS = {
 /* ---------------- category illustrations (pure client-side SVG) ---------------- */
 let _photoUid = 0;
 function catPhoto(cat, uid) {
-  const u = (uid !== undefined ? uid : _photoUid++);
-  const g = `g${cat}${u}`;
+  const u = String(uid !== undefined ? uid : _photoUid++).replace(/[^\w-]/g, '');
+  const g = `g${String(cat).replace(/[^\w-]/g, '')}${u}`;
   if (cat === 'metal') {
     return `<svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
       <defs><linearGradient id="${g}bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E9EDF6"/><stop offset="1" stop-color="#D7DEEE"/></linearGradient>
@@ -143,26 +143,26 @@ function toast(messages) {
    top, and the pickup location shown once at the bottom of the card. */
 function specsBlockHTML(it) {
   return `<div class="cn-specs item-specs">
-    <div><span>Specs</span><b>${it.specs || it.condition || '—'}</b></div>
-    <div><span>Quantity</span><b>${it.qty || '—'}</b></div>
-    <div><span>Location</span><b>${it.region || '—'}</b></div>
+    <div><span>Specs</span><b>${esc(it.specs || it.condition || '—')}</b></div>
+    <div><span>Quantity</span><b>${esc(it.qty || '—')}</b></div>
+    <div><span>Location</span><b>${esc(it.region || '—')}</b></div>
   </div>`;
 }
 function pickupLineHTML(it) {
-  return `<div class="cn-pickup item-pickup"><span class="pin">📍</span>Ready for pickup: <b>${it.pickupLocation || it.region || '—'}</b></div>`;
+  return `<div class="cn-pickup item-pickup"><span class="pin">📍</span>Ready for pickup: <b>${esc(it.pickupLocation || it.region || '—')}</b></div>`;
 }
 
 /* ---------------- chain rendering (home + how-it-works worked example) ---------------- */
 const linkIconSVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function chainNodeHTML(it, i, isFirst) {
-  const contact = !isFirst ? `<div class="cn-owner" style="margin-top:6px;">${it.owner}${it.phone ? ' · ' + it.phone : ''}</div>` : '';
+  const contact = !isFirst ? `<div class="cn-owner" style="margin-top:6px;">${esc(it.owner)}${it.phone ? ' · ' + esc(it.phone) : ''}</div>` : '';
   return `<div class="cn">
       <div class="cn-photo">${catPhoto(it.cat)}</div>
       <div class="cn-body">
         <div class="cn-step">${isFirst ? 'STEP 0 · YOU' : 'STEP ' + i}</div>
-        <div class="cn-title">${it.title}</div>
+        <div class="cn-title">${esc(it.title)}</div>
         ${specsBlockHTML(it)}
-        <div class="cn-price">est. value <b>$${Number(it.price).toLocaleString()}</b>${it.cashOk ? ` · open to +${it.cashRange}` : ''}</div>
+        <div class="cn-price">est. value <b>$${Number(it.price).toLocaleString()}</b>${it.cashOk ? ` · open to +${esc(it.cashRange)}` : ''}</div>
         ${contact}
         ${pickupLineHTML(it)}
       </div>
