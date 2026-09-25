@@ -16,6 +16,7 @@ const { router: listingsRoutes } = require('./routes/listings');
 const agentRoutes = require('./routes/agent');
 const dealsRoutes = require('./routes/deals');
 const { createCardsRouter } = require('./routes/cards');
+const { createCronRouter } = require('./routes/cron');
 
 const app = express();
 app.set('trust proxy', 1); // needed behind Render/Railway/Heroku/Vercel-style proxies for correct client IPs & secure cookies
@@ -36,6 +37,7 @@ app.use('/api/listings', listingsRoutes);
 app.use('/api/agent', agentRoutes);
 app.use('/api/deals', dealsRoutes);
 app.use('/api/cards', createCardsRouter());
+app.use('/api/cron', createCronRouter());
 
 app.get('/api/health', (req, res) => {
   res.json({

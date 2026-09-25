@@ -58,6 +58,7 @@ Set these in the Vercel dashboard under **Project Settings → Environment Varia
 | `PUBLIC_BASE_URL` | e.g. `https://b2-b-swap-ae2r.vercel.app` | Optional — base of the card / manage links emailed after a stock-list upload. Defaults to the request's host. |
 | `MAX_UPLOAD_MB` | e.g. `4` | Optional — stock-list upload limit. Keep it at `4` or below on Vercel (Functions reject request bodies over 4.5 MB). |
 | `ADMIN_TOKEN` | A long random string (16+ chars) | Optional — sent as the `X-Manage-Key` header, it can fix or remove **any** stock card (moderation). |
+| `CRON_SECRET` | A long random string (e.g. `openssl rand -hex 32`) | Recommended — Vercel sends it to `/api/cron/keepalive` (daily job that keeps a free Supabase project from being paused after 7 idle days); requests without it are rejected once it's set. |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | From your Twilio console | Optional — only needed for the opt-in SMS trade-confirmation feature. Without these, SMS is skipped/logged, same as today. |
 
 Nothing else changes in Vercel Project Settings yet at this stage (the Root Directory setting and any `api/`/`vercel.json` files come in the code-migration stage).
