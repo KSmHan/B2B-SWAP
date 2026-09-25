@@ -84,6 +84,7 @@ async function renderNav(active) {
   try { const me = await api('/auth/me'); account = me.account; } catch (e) { /* not logged in */ }
   const items = [
     ['how-it-works.html', 'How it works', 'how'],
+    ['materials.html', 'Materials', 'materials'],
     ['catalog.html', 'Catalog', 'catalog'],
     ['how-it-works.html#faq', 'FAQ', 'faq'],
   ];
@@ -95,7 +96,7 @@ async function renderNav(active) {
         <nav class="nav-center">${links}</nav>
         <div class="top-actions">
           <a href="account.html" class="login-link">${account && account.verified ? (account.company || 'Account') : 'Log in'}</a>
-          <a href="account.html" class="btn btn-primary small">Free to join</a>
+          <a href="upload.html" class="btn btn-primary small">Upload stock list</a>
         </div>
       </div>
     </header>`;
@@ -112,7 +113,7 @@ function renderFooter() {
           <p>AI platform for industrial surplus exchange.</p>
         </div>
         <div class="foot-col"><h4>Platform</h4>
-          <a href="how-it-works.html">How it works</a><a href="catalog.html">Catalog</a><a href="account.html">List surplus</a>
+          <a href="how-it-works.html">How it works</a><a href="materials.html">Materials</a><a href="catalog.html">Catalog</a><a href="upload.html">Upload stock list</a>
         </div>
         <div class="foot-col"><h4>Company</h4>
           <a href="how-it-works.html#faq">FAQ</a><a href="#">Trust &amp; safety</a><a href="#">Contact</a>
@@ -214,3 +215,28 @@ function renderChainInto(containerEl, path) {
   }
   containerEl.classList.add('show');
 }
+
+/* ---------------- stock lists (upload / materials / card pages) ---------------- */
+function esc(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+let _materials = null;
+async function loadMaterials() {
+  if (!_materials) {
+    const data = await api('/cards/materials');
+    _materials = data.materials;
+  }
+  return _materials;
+}
+function materialInfo(key) {
+  return (_materials || []).find(m => m.key === key) || { key, label: key, group: 'other' };
+}
+function materialTag(key) {
+  const m = materialInfo(key);
+  return `<span class="mat-tag g-${esc(m.group)}">${esc(m.label)}</span>`;
+}
+function qtyText(it) {
+  return it.qty ? `${it.qty}${it.unit ? ' ' + it.unit : ''}` : '—';
+}
+function plural(n, word) { return `${n} ${word}${n === 1 ? '' : 's'}`; }

@@ -6,7 +6,13 @@
     { "source": "/catalog.html", "destination": "/public/catalog.html" },
     { "source": "/account.html", "destination": "/public/account.html" },
     { "source": "/how-it-works.html", "destination": "/public/how-it-works.html" },
+    { "source": "/upload.html", "destination": "/public/upload.html" },
+    { "source": "/materials.html", "destination": "/public/materials.html" },
+    { "source": "/card.html", "destination": "/public/card.html" },
     { "source": "/app.js", "destination": "/public/app.js" },
     { "source": "/styles.css", "destination": "/public/styles.css" }
-  ]
+  ],
+  "functions": {
+    "api/index.js": { "maxDuration": 30, "memory": 1024, "includeFiles": "node_modules/pdf-parse/dist/**" }
+  }
 }

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upload your stock list — B2B SWAP</title>
+<meta name="description" content="Publish your surplus stock on B2B SWAP in one step: company name, a contact, and one file. Excel, CSV, Word or PDF — we catalogue every item by material automatically.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="navRoot"></div>
+
+<main>
+  <section>
+    <div class="section-head" style="text-align:center;">
+      <div class="eyebrow">UPLOAD STOCK LIST</div>
+      <h2>Your whole stock list, live in one step</h2>
+      <p>Add your company and a contact, attach one file — Excel, CSV, Word or PDF. We'll sort every item by material (aluminum, copper, steel, MDF, plywood…) automatically. No account needed.</p>
+    </div>
+
+    <div class="up-shell">
+      <form class="up-card" id="upForm" novalidate>
+        <div class="up-grid">
+          <div class="field">
+            <label for="company">Company name <span class="req">*</span></label>
+            <input type="text" id="company" name="company" autocomplete="organization" placeholder="e.g. Titan Alloys Co." required>
+            <div class="field-error" data-for="company"></div>
+          </div>
+          <div class="field">
+            <label for="contactName">Contact person <span class="req">*</span></label>
+            <input type="text" id="contactName" name="contactName" autocomplete="name" placeholder="e.g. Anna Smith" required>
+            <div class="field-error" data-for="contactName"></div>
+          </div>
+          <div class="field">
+            <label for="email">Email <span class="req">*</span></label>
+            <input type="email" id="email" name="email" autocomplete="email" inputmode="email" placeholder="you@company.com" required>
+            <div class="field-error" data-for="email"></div>
+          </div>
+          <div class="field">
+            <label for="phone">Phone <span class="req">*</span></label>
+            <input type="tel" id="phone" name="phone" autocomplete="tel" inputmode="tel" placeholder="+1 312 555 0142" required>
+            <div class="field-error" data-for="phone"></div>
+          </div>
+        </div>
+
+        <label class="dropzone" id="dropzone" for="file">
+          <input type="file" id="file" name="file" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt,.docx,.doc,.rtf,.pdf">
+          <div class="dz-icon" id="dzIcon">⬆</div>
+          <div class="dz-title" id="dzTitle">Drop your stock list here</div>
+          <div class="dz-sub" id="dzSub">or click to choose a file · up to <span id="maxMb">4</span> MB</div>
+          <div class="fmt-row"><span class="fmt">XLSX</span><span class="fmt">XLS</span><span class="fmt">CSV</span><span class="fmt">DOCX</span><span class="fmt">DOC</span><span class="fmt">PDF</span></div>
+        </label>
+        <div class="field-error" data-for="file"></div>
+
+        <div class="hp-field" aria-hidden="true">
+          <label for="website">Leave this empty</label>
+          <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+        </div>
+
+        <button type="submit" class="btn btn-primary block up-submit" id="submitBtn">Publish stock list</button>
+        <p class="up-note">Tip: a simple table with a name column (plus quantity, unit and price if you have them) gives the best result.</p>
+      </form>
+
+      <div class="up-card" id="upProgress" style="display:none;">
+        <div class="up-progress"><div class="big-spin"></div><div id="progressText">Uploading…</div></div>
+      </div>
+
+      <div class="up-card" id="upDone" style="display:none;">
+        <div class="ok-head">
+          <div class="ok-dot">✓</div>
+          <div><h3 id="doneTitle"></h3><p id="doneSub"></p></div>
+        </div>
+        <div class="mat-chips" id="doneMaterials" style="margin-top:18px;"></div>
+        <div class="stock-list no-co-list" id="donePreview" style="margin-top:16px;"></div>
+        <div class="keep-link">
+          <b>Save your manage link.</b> It's the only way to edit materials or remove this listing<span id="emailedNote"></span>.
+          <div class="row"><input type="text" id="manageUrl" readonly><button type="button" class="btn btn-ghost small" id="copyBtn">Copy</button></div>
+        </div>
+        <div class="btn-row">
+          <a class="btn btn-primary" id="viewCardBtn" href="#">Open your card</a>
+          <a class="btn btn-ghost" href="materials.html">Browse all materials</a>
+          <button type="button" class="btn btn-ghost" id="againBtn">Upload another file</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="footRoot"></div>
+
+<script src="app.js"></script>
+<script>
+renderNav('upload');
+renderFooter();
+loadMaterials().catch(()=>{});
+
+const MAX_MB = 4;
+document.getElementById('maxMb').textContent = MAX_MB;
+const form = document.getElementById('upForm');
+const fileInput = document.getElementById('file');
+const dz = document.getElementById('dropzone');
+const OK_EXT = ['xlsx','xls','xlsm','ods','csv','tsv','txt','docx','doc','rtf','pdf'];
+
+function setError(name, msg){
+  const el = form.querySelector(`.field-error[data-for="${name}"]`);
+  if(el) el.textContent = msg || '';
+}
+function clearErrors(){ form.querySelectorAll('.field-error').forEach(e=>e.textContent=''); }
+function fmtSize(b){ return b > 1024*1024 ? (b/1024/1024).toFixed(1)+' MB' : Math.max(1, Math.round(b/1024))+' KB'; }
+
+function showFile(){
+  const f = fileInput.files[0];
+  setError('file','');
+  if(!f){
+    dz.classList.remove('has-file');
+    document.getElementById('dzIcon').textContent = '⬆';
+    document.getElementById('dzTitle').textContent = 'Drop your stock list here';
+    document.getElementById('dzSub').innerHTML = `or click to choose a file · up to ${MAX_MB} MB`;
+    return;
+  }
+  dz.classList.add('has-file');
+  document.getElementById('dzIcon').textContent = '✓';
+  document.getElementById('dzTitle').textContent = f.name;
+  document.getElementById('dzSub').textContent = fmtSize(f.size) + ' · click to choose a different file';
+  const ext = (f.name.split('.').pop() || '').toLowerCase();
+  if(!OK_EXT.includes(ext)) setError('file','This file type isn\'t supported. Upload Excel, CSV, Word or PDF.');
+  else if(f.size > MAX_MB*1024*1024) setError('file',`This file is ${fmtSize(f.size)} — the limit is ${MAX_MB} MB.`);
+}
+fileInput.addEventListener('change', showFile);
+['company','contactName','email','phone'].forEach(id=>document.getElementById(id).addEventListener('input', ()=>setError(id,'')));
+['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev=>dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.remove('drag'); }));
+dz.addEventListener('drop', e=>{
+  if(e.dataTransfer && e.dataTransfer.files.length){ fileInput.files = e.dataTransfer.files; showFile(); }
+});
+
+function validate(){
+  clearErrors();
+  let ok = true;
+  const v = id => document.getElementById(id).value.trim();
+  if(v('company').length < 2){ setError('company','Enter your company name.'); ok=false; }
+  if(v('contactName').length < 2){ setError('contactName','Enter a contact name.'); ok=false; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v('email'))){ setError('email','Enter a valid email.'); ok=false; }
+  if(v('phone').replace(/\D/g,'').length < 6){ setError('phone','Enter a valid phone number.'); ok=false; }
+  const f = fileInput.files[0];
+  if(!f){ setError('file','Attach your stock list (Excel, CSV, Word or PDF).'); ok=false; }
+  else {
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    if(!OK_EXT.includes(ext)){ setError('file','This file type isn\'t supported. Upload Excel, CSV, Word or PDF.'); ok=false; }
+    else if(f.size > MAX_MB*1024*1024){ setError('file',`This file is ${fmtSize(f.size)} — the limit is ${MAX_MB} MB.`); ok=false; }
+  }
+  return ok;
+}
+
+form.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  if(!validate()){
+    const firstErr = [...form.querySelectorAll('.field-error')].find(x=>x.textContent);
+    if(firstErr) firstErr.scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
+  form.style.display = 'none';
+  document.getElementById('upProgress').style.display = 'block';
+  const pt = document.getElementById('progressText');
+  pt.textContent = 'Uploading your file…';
+  const t = setTimeout(()=>{ pt.textContent = 'Reading your list and sorting items by material…'; }, 900);
+
+  let res, data = null;
+  try{
+    res = await fetch('/api/cards', { method:'POST', body: new FormData(form), credentials:'include' });
+    try{ data = await res.json(); }catch(_){}
+  }catch(err){ res = null; }
+  clearTimeout(t);
+  document.getElementById('upProgress').style.display = 'none';
+
+  if(!res || !res.ok){
+    form.style.display = 'block';
+    if(data && data.fields){
+      Object.entries(data.fields).forEach(([k,v])=>setError(k, v));
+    } else if(data && data.message){
+      setError('file', data.message);
+    } else if(res && res.status === 413){
+      setError('file', `The file is larger than ${MAX_MB} MB.`);
+    } else {
+      setError('file', 'Something went wrong uploading — please try again.');
+    }
+    return;
+  }
+  showDone(data);
+});
+
+async function showDone(data){
+  try{ await loadMaterials(); }catch(_){}
+  const card = data.card;
+  document.getElementById('doneTitle').textContent = `${plural(card.itemCount, 'item')} from ${card.company} are live`;
+  document.getElementById('doneSub').textContent = `${card.fileName} — sorted into ${plural(Object.keys(card.categories).length, 'material type')}.`;
+  const cats = Object.entries(card.categories).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('doneMaterials').innerHTML = cats.map(([k,n])=>
+    `<span class="mat-chip static">${esc(materialInfo(k).label)} <span class="n">${n}</span></span>`).join('');
+  const rows = data.items.slice(0, 8).map(it=>`
+    <div class="stock-row no-co">
+      <div class="m">${materialTag(it.category)}</div>
+      <div class="ti"><div class="t">${esc(it.title)}</div>${it.specs ? `<div class="s">${esc(it.specs)}</div>` : ''}</div>
+      <div class="q">${esc(qtyText(it))}</div>
+      <div class="p">${esc(it.price || '')}</div>
+    </div>`).join('');
+  const more = card.itemCount > 8 ? `<div class="list-empty" style="padding:12px;">+ ${card.itemCount - 8} more on your card</div>` : '';
+  document.getElementById('donePreview').innerHTML = rows + more;
+  document.getElementById('manageUrl').value = data.manageUrl;
+  document.getElementById('viewCardBtn').href = data.manageUrl;
+  document.getElementById('emailedNote').textContent = data.emailSent ? ` — we've also emailed it to ${card.email}` : '';
+  document.getElementById('upDone').style.display = 'block';
+  document.getElementById('upDone').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+document.getElementById('copyBtn').onclick = async ()=>{
+  const inp = document.getElementById('manageUrl');
+  try{ await navigator.clipboard.writeText(inp.value); }catch(_){ inp.select(); document.execCommand('copy'); }
+  toast('Manage link copied.');
+};
+document.getElementById('againBtn').onclick = ()=>{
+  fileInput.value = ''; showFile();
+  document.getElementById('upDone').style.display = 'none';
+  form.style.display = 'block';
+  window.scrollTo({top:0, behavior:'smooth'});
+};
+</script>
+</body>
+</html>

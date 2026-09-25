@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Materials catalog — B2B SWAP</title>
+<meta name="description" content="Surplus aluminum, copper, steel, MDF, plywood and more from companies' uploaded stock lists — sorted by material automatically.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="navRoot"></div>
+
+<main>
+  <section style="padding-bottom:0;">
+    <div class="section-head" style="text-align:left;max-width:1100px;display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;">
+      <div style="max-width:640px;">
+        <div class="eyebrow">MATERIALS CATALOG</div>
+        <h2>Surplus stock, sorted by material</h2>
+        <p>Every item from every uploaded stock list, catalogued automatically. Pick a material or search — contacts are on every row.</p>
+      </div>
+      <a href="upload.html" class="btn btn-primary">Upload your stock list</a>
+    </div>
+  </section>
+
+  <section style="padding-top:8px;">
+    <div class="cat-toolbar">
+      <div class="cat-search">
+        <input type="search" id="q" placeholder="Search: sheet 2mm, AMg3, birch plywood…" autocomplete="off">
+        <span class="count" id="count"></span>
+      </div>
+      <div class="mat-chips" id="chips"></div>
+    </div>
+
+    <div class="stock-list" id="list"><div class="list-empty">Loading…</div></div>
+    <div class="more-row" id="moreRow" style="display:none;"><button class="btn btn-ghost" id="moreBtn">Show more</button></div>
+  </section>
+
+  <section class="border-t" id="coSection" style="display:none;">
+    <div class="section-head" style="text-align:left;max-width:1100px;margin-bottom:20px;">
+      <div class="eyebrow">RECENTLY ADDED</div>
+      <h2 style="font-size:22px;">Companies with fresh stock lists</h2>
+    </div>
+    <div class="co-strip" id="coStrip"></div>
+  </section>
+</main>
+
+<div id="footRoot"></div>
+
+<script src="app.js"></script>
+<script>
+renderNav('materials');
+renderFooter();
+
+const params = new URLSearchParams(location.search);
+let state = { cat: params.get('cat') || '', q: params.get('q') || '', offset: 0, total: 0 };
+const PAGE = 60;
+document.getElementById('q').value = state.q;
+
+function syncUrl(){
+  const p = new URLSearchParams();
+  if(state.cat) p.set('cat', state.cat);
+  if(state.q) p.set('q', state.q);
+  history.replaceState(null, '', location.pathname + (p.toString() ? '?' + p : ''));
+}
+
+async function renderChips(){
+  let mats = [];
+  try{ mats = await loadMaterials(); }catch(_){}
+  const total = mats.reduce((s,m)=>s+m.count, 0);
+  const shown = mats.filter(m=>m.count > 0 || m.key === state.cat);
+  document.getElementById('chips').innerHTML =
+    `<button class="mat-chip ${state.cat ? '' : 'active'}" data-cat="">All materials <span class="n">${total}</span></button>` +
+    shown.map(m=>`<button class="mat-chip ${state.cat===m.key?'active':''}" data-cat="${esc(m.key)}">${esc(m.label)} <span class="n">${m.count}</span></button>`).join('');
+  document.querySelectorAll('#chips .mat-chip').forEach(b=>b.onclick = ()=>{
+    state.cat = b.dataset.cat; state.offset = 0; syncUrl();
+    document.querySelectorAll('#chips .mat-chip').forEach(x=>x.classList.toggle('active', x===b));
+    loadItems(false);
+  });
+}
+
+function rowHTML(it){
+  const c = it.card || {};
+  return `<div class="stock-row">
+    <div class="m">${materialTag(it.category)}</div>
+    <div class="ti"><div class="t">${esc(it.title)}</div>${it.specs ? `<div class="s">${esc(it.specs)}</div>` : ''}</div>
+    <div class="q">${esc(qtyText(it))}</div>
+    <div class="p">${esc(it.price || '')}</div>
+    <div class="co">
+      <a href="card.html?id=${encodeURIComponent(c.id)}">${esc(c.company)}</a>
+      <div class="ct">${esc(c.contactName)} · <a href="tel:${esc((c.phone||'').replace(/[^\d+]/g,''))}">${esc(c.phone)}</a><br><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></div>
+    </div>
+  </div>`;
+}
+const HEAD = `<div class="stock-row head"><div>Material</div><div>Item</div><div>Quantity</div><div>Price</div><div>Company</div></div>`;
+
+let reqId = 0;
+async function loadItems(append){
+  const my = ++reqId;
+  const list = document.getElementById('list');
+  if(!append) list.innerHTML = '<div class="list-empty">Loading…</div>';
+  const p = new URLSearchParams({ offset: state.offset, limit: PAGE });
+  if(state.cat) p.set('cat', state.cat);
+  if(state.q) p.set('q', state.q);
+  let data;
+  try{ data = await api('/cards/items?' + p); }
+  catch(e){ if(my===reqId) list.innerHTML = '<div class="list-empty">Could not load the catalog — please try again.</div>'; return; }
+  if(my !== reqId) return;
+  state.total = data.total;
+  document.getElementById('count').textContent = plural(data.total, 'item');
+  if(!append){
+    list.innerHTML = data.items.length ? HEAD + data.items.map(rowHTML).join('') :
+      `<div class="list-empty">${state.q || state.cat ? 'Nothing matches yet.' : 'No stock lists yet — be the first.'}<br><a class="btn btn-primary small" href="upload.html">Upload your stock list</a></div>`;
+  } else {
+    list.insertAdjacentHTML('beforeend', data.items.map(rowHTML).join(''));
+  }
+  state.offset += data.items.length;
+  document.getElementById('moreRow').style.display = state.offset < state.total ? 'block' : 'none';
+}
+document.getElementById('moreBtn').onclick = ()=>loadItems(true);
+
+let deb;
+document.getElementById('q').addEventListener('input', e=>{
+  clearTimeout(deb);
+  deb = setTimeout(()=>{ state.q = e.target.value.trim(); state.offset = 0; syncUrl(); loadItems(false); }, 250);
+});
+
+async function loadCompanies(){
+  try{
+    await loadMaterials();
+    const { cards } = await api('/cards?limit=8');
+    if(!cards.length) return;
+    document.getElementById('coStrip').innerHTML = cards.map(c=>{
+      const top = Object.entries(c.categories || {}).sort((a,b)=>b[1]-a[1]).slice(0,4);
+      return `<a class="co-card" href="card.html?id=${encodeURIComponent(c.id)}">
+        <div class="nm">${esc(c.company)}</div>
+        <div class="meta">${plural(c.itemCount, 'item')}</div>
+        <div class="tags">${top.map(([k])=>materialTag(k)).join('')}</div>
+      </a>`;
+    }).join('');
+    document.getElementById('coSection').style.display = 'block';
+  }catch(_){}
+}
+
+renderChips().then(()=>loadItems(false));
+loadCompanies();
+</script>
+</body>
+</html>

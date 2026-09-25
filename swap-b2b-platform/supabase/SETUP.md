@@ -26,6 +26,11 @@ credentials ready for the code migration that follows in a later stage.
 
 This is idempotent (`create table if not exists`), so re-running it later is harmless.
 
+6. **Stock-list uploads:** open another **New query**, paste `supabase/002_stock_cards.sql`, and **Run**.
+   Verify `stock_cards` and `stock_items` exist in **Table Editor**, the `stock_category_counts` view
+   exists, and a private `stock-files` bucket appears under **Storage**. Also idempotent. This step is
+   required for the `/upload.html` page — without it, uploads fail with a 500 in production.
+
 ## 3. Collect the credentials the app will need
 
 1. In the dashboard, go to **Project Settings → API**.
@@ -50,6 +55,9 @@ Set these in the Vercel dashboard under **Project Settings → Environment Varia
 | `SMTP_PORT` | e.g. `587` | Optional — defaults to `587` if unset. |
 | `SMTP_SECURE` | `true` or `false` | Optional — defaults to `false` if unset. |
 | `MAIL_FROM` | e.g. `no-reply@yourdomain.com` | Optional — defaults to `SMTP_USER` if unset. |
+| `PUBLIC_BASE_URL` | e.g. `https://b2-b-swap-ae2r.vercel.app` | Optional — base of the card / manage links emailed after a stock-list upload. Defaults to the request's host. |
+| `MAX_UPLOAD_MB` | e.g. `4` | Optional — stock-list upload limit. Keep it at `4` or below on Vercel (Functions reject request bodies over 4.5 MB). |
+| `ADMIN_TOKEN` | A long random string (16+ chars) | Optional — sent as the `X-Manage-Key` header, it can fix or remove **any** stock card (moderation). |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | From your Twilio console | Optional — only needed for the opt-in SMS trade-confirmation feature. Without these, SMS is skipped/logged, same as today. |
 
 Nothing else changes in Vercel Project Settings yet at this stage (the Root Directory setting and any `api/`/`vercel.json` files come in the code-migration stage).
