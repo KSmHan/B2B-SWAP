@@ -68,3 +68,12 @@ create or replace view stock_category_counts with (security_invoker = true) as
 insert into storage.buckets (id, name, public, file_size_limit)
 values ('stock-files', 'stock-files', false, 10485760)
 on conflict (id) do nothing;
+
+-- Newer Supabase projects no longer grant the API roles access to tables
+-- created in SQL automatically, which makes every /api/cards call fail with
+-- "permission denied for table stock_cards". Only the server's service role
+-- needs access (RLS keeps anon/authenticated out regardless).
+grant select, insert, update, delete on table stock_cards, stock_items to service_role;
+grant select on table stock_category_counts to service_role;
+grant usage, select on all sequences in schema public to service_role;
+notify pgrst, 'reload schema';

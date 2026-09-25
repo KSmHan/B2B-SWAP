@@ -16,6 +16,6 @@
     { "path": "/api/cron/keepalive", "schedule": "17 9 * * *" }
   ],
   "functions": {
-    "api/index.js": { "maxDuration": 30, "memory": 1024, "includeFiles": "node_modules/pdf-parse/dist/**" }
+    "api/index.js": { "maxDuration": 30, "memory": 1024, "includeFiles": "{node_modules/pdf-parse/dist/**,node_modules/@napi-rs/canvas/**,node_modules/@napi-rs/canvas-linux-x64-gnu/**}" }
   }
 }
