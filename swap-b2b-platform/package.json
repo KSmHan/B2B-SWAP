@@ -1,7 +1,7 @@
 {
   "name": "b2b-swap",
   "version": "1.0.0",
-  "description": "B2B SWAP \u2014 AI-matched barter platform for surplus industrial inventory",
+  "description": "B2B SWAP — AI-matched barter platform for surplus industrial inventory",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
