@@ -156,3 +156,21 @@ test('"What do you need in return?" steers the chain', () => {
   const chain = M.findChain(rows, rows[0], M.tokenize('HDPE pellets'), M.MAX_HOPS);
   assert.deepEqual(chain.map(c => c.title), ['Steel plate 10mm', 'Birch plywood 18mm', 'Copper busbar', 'HDPE pellets']);
 });
+
+test('several suppliers of the same material are all returned', () => {
+  const pub = (id, owner, cat, wantCat, title) => Object.assign(listing(id, cat, wantCat, title), { owner });
+  const all = [
+    pub('start', 'SteelCo', 'metal', 'wood', 'steel sheet'),
+    pub('a1', 'Oak Mill', 'wood', 'metal', 'White Oak Lumber 4/4'),
+    pub('a2', 'Oak Mill', 'wood', 'metal', 'White Oak Lumber 8/4'), // same company: listed once
+    pub('b1', 'Forest Co', 'wood', 'plastic', 'White oak lumber, kiln dried'),
+    pub('c1', 'Veneer Ltd', 'wood', 'metal', 'Walnut veneer'), // other wood, not what was asked
+    pub('d1', 'Plastics Inc', 'plastic', 'metal', 'white HDPE sheet'), // other category
+  ];
+  const { path, alternatives } = M.findChains(all, all[0], M.tokenize('White Oak Lumber'), M.MAX_HOPS);
+  assert.deepEqual(path.map(p => p.id), ['start', 'a1']);
+  assert.deepEqual(alternatives.map(a => a.item.owner), ['Forest Co']);
+  assert.deepEqual(alternatives[0].path.map(p => p.id), ['start', 'b1']);
+  // findChain keeps returning just the best chain.
+  assert.deepEqual(M.findChain(all, all[0], M.tokenize('White Oak Lumber'), M.MAX_HOPS).map(p => p.id), ['start', 'a1']);
+});

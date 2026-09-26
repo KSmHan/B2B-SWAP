@@ -209,9 +209,9 @@ function matchReason(it, words, material, cat) {
   return '';
 }
 
-function chainNodeHTML(it, i, last, ctx) {
+function chainNodeHTML(it, i, last, ctx, opt = {}) {
   const role = i === 0 ? 'give' : (i === last ? 'get' : 'mid');
-  const label = role === 'give' ? 'YOU GIVE' : role === 'get' ? 'YOU GET' : `STEP ${i}`;
+  const label = opt.label || (role === 'give' ? 'YOU GIVE' : role === 'get' ? 'YOU GET' : `STEP ${i}`);
   const words = role === 'give' ? ctx.haveWords : role === 'get' ? ctx.needWords : (ctx.midWords || []);
   const reason = role === 'get' && last > 0 ? matchReason(it, ctx.needWords, ctx.needMaterial, ctx.needCat)
     : role === 'give' ? matchReason(it, ctx.haveWords, ctx.haveMaterial, null) : '';
@@ -233,6 +233,7 @@ function chainNodeHTML(it, i, last, ctx) {
           ${it.phone ? `<br><a href="tel:${esc(tel)}">${esc(it.phone)}</a>` : ''}
           ${it.isStock && it.cardId ? `<br><a class="btn-link" href="card.html?id=${encodeURIComponent(it.cardId)}">Full stock list →</a>` : ''}
         </div>
+        ${opt.footer || ''}
       </div>
     </div>`;
 }
@@ -257,11 +258,12 @@ function renderChainInto(containerEl, path, opts = {}) {
   });
   const companies = new Set(path.map(p => p.owner)).size;
   const first = path[0], end = path[last];
+  const alts = opts.alternatives || [];
   containerEl.innerHTML = `
     <div class="chain-summary">
       <div class="cs-end"><span class="cs-label">You give</span><b>${highlightHTML(first.title, ctx.haveWords)}</b><span class="cs-sub">${esc(first.owner || '')}</span></div>
       <div class="cs-mid"><span class="cs-hops">${last === 0 ? 'direct match' : plural(last, 'hop')}</span><span class="cs-line"></span><span class="cs-sub">${companies === 1 ? '1 company' : companies + ' companies'}</span></div>
-      <div class="cs-end cs-get"><span class="cs-label">You get</span><b>${highlightHTML(end.title, ctx.needWords)}</b><span class="cs-sub">${esc(end.owner || '')}</span></div>
+      <div class="cs-end cs-get"><span class="cs-label">You get</span><b>${highlightHTML(end.title, ctx.needWords)}</b><span class="cs-sub">${esc(end.owner || '')}${alts.length ? ` <a class="cs-more" href="#altSuppliers">+ ${plural(alts.length, 'more supplier')}</a>` : ''}</span></div>
     </div>
     <div class="chain-head">
       <div class="chain-title">Trade chain, step by step</div>
@@ -271,7 +273,18 @@ function renderChainInto(containerEl, path, opts = {}) {
     <div class="chain-actions">
       <button class="btn btn-primary small" id="startDealBtn">Confirm interest &amp; start deal</button>
       <span class="chain-note">Notifies every company in the chain by email — and by SMS if they've added a phone number.</span>
-    </div>`;
+    </div>
+    ${alts.length ? altSuppliersHTML(alts, ctx) : ''}`;
+  // "Show this chain" on another supplier: it becomes the main result and the
+  // current one joins the list, so every supplier stays one click away.
+  containerEl.querySelectorAll('.alt-show').forEach(b => b.onclick = () => {
+    const pick = alts[Number(b.dataset.i)];
+    const rest = alts.filter(a => a !== pick);
+    const others = [{ supplier: end, chain: path }, ...rest];
+    renderChainInto(containerEl, pick.chain, Object.assign({}, opts, { alternatives: others }));
+    if (opts.onSwitch) opts.onSwitch(pick.chain);
+    containerEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   const btn = containerEl.querySelector('#startDealBtn');
   if (btn) {
     btn.onclick = async () => {
@@ -297,6 +310,24 @@ function renderChainInto(containerEl, path, opts = {}) {
     };
   }
   containerEl.classList.add('show');
+}
+
+/** Every other company offering what was asked for, each with how to get it. */
+function altSuppliersHTML(alts, ctx) {
+  const cards = alts.map((a, i) => {
+    const hops = a.chain ? a.chain.length - 1 : null;
+    const how = a.chain
+      ? `<div class="alt-how"><span>${hops === 0 ? 'Direct match' : esc(plural(hops, 'hop')) + ' chain'}</span><button type="button" class="btn btn-ghost small alt-show" data-i="${i}">Show this chain</button></div>`
+      : `<div class="alt-how"><span>No swap chain yet — contact them directly</span></div>`;
+    return chainNodeHTML(a.supplier, 1, 1, ctx, { label: 'ALSO FROM', footer: how }).replace('cn cn-get', 'cn cn-get cn-alt');
+  }).join('');
+  return `<div class="alt-suppliers" id="altSuppliers">
+      <div class="chain-head">
+        <div class="chain-title">Also available from ${plural(alts.length, 'other supplier')}</div>
+        <div class="chain-count">same material · compare quantity, price and location</div>
+      </div>
+      <div class="chain-track alt-track">${cards}</div>
+    </div>`;
 }
 
 /** "No chain" / "nothing like that": show the closest listings as cards, not a sentence. */
