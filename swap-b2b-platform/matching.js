@@ -168,13 +168,21 @@ function score(tokens, itemTokens) {
  *  own words and decide the order; `material` (lib/materials.js key named in it,
  *  e.g. "steel") only breaks ties and lets rows of that material qualify even
  *  when no word matches ("алюминий" → "Круг 60" on an aluminum sheet tab). */
+/** How many request words appear in the title itself — breaks ties between items
+ *  that only match through tags ("White Oak Lumber" → the lumber, not the veneer). */
+function titleScore(words, it) {
+  const title = String(it.title || '').toLowerCase();
+  return words.filter(w => title.includes(w)).length;
+}
+
 function findStartCandidates(allItems, words, material) {
   return allItems
     .filter(it => it.status === 'live')
     .map(it => {
       // Same material as requested: an uploaded row of it, or a listing naming it.
       const sameMaterial = material && (it.material === material || (!it.material && score([material], it.tags) > 0));
-      return { it, s: score(words, it.tags) + (sameMaterial ? 0.5 : 0) };
+      const s = score(words, it.tags);
+      return { it, s: s + (sameMaterial ? 0.5 : 0) + (s ? titleScore(words, it) * 0.1 : 0) };
     })
     .filter(x => x.s > 0)
     .sort((a, b) => b.s - a.s)
@@ -188,23 +196,33 @@ function findStartCandidates(allItems, words, material) {
  * exists within the hop limit — the old greedy walk could dead-end early.
  * Among equally short chains the final item that best matches the request
  * wins. With no `need` at all, any item the start's owner wants satisfies it.
+ * An item without `wantCat` (uploaded stock: the owner is open to offers)
+ * can be followed by any item.
  */
 function findChain(allItems, start, wantTokens, maxHops) {
   const wantCatGeneric = detectCategory(wantTokens);
   const hasWant = wantTokens.length > 0;
-  const matchScore = (it) => score(wantTokens, it.tags) + (wantCatGeneric && it.cat === wantCatGeneric ? 1 : 0);
-  const satisfied = (it) => (hasWant ? matchScore(it) > 0 : it.cat === start.wantCat);
+  const matchScore = (it) => score(wantTokens, it.tags) + (wantCatGeneric && it.cat === wantCatGeneric ? 1 : 0) + titleScore(wantTokens, it) * 0.5;
+  const satisfied = (it) => (hasWant ? matchScore(it) > 0 : (!start.wantCat || it.cat === start.wantCat));
 
   const byCat = {};
   allItems.forEach(it => { if (it.status === 'live') (byCat[it.cat] = byCat[it.cat] || []).push(it); });
 
+  const live = allItems.filter(it => it.status === 'live');
   const prev = new Map([[start.id, null]]);
+  let everythingQueued = false;
   let frontier = [start];
   for (let hop = 1; hop <= maxHops && frontier.length; hop++) {
     const next = [];
     const hits = [];
     for (const cur of frontier) {
-      for (const it of byCat[cur.wantCat] || []) {
+      // An owner with no stated want (uploaded stock lists) is open to offers:
+      // any live item can follow it. Expanding that once covers every such node.
+      let pool;
+      if (cur.wantCat) pool = byCat[cur.wantCat] || [];
+      else if (!everythingQueued) { pool = live; everythingQueued = true; }
+      else pool = [];
+      for (const it of pool) {
         if (prev.has(it.id)) continue;
         prev.set(it.id, cur);
         next.push(it);

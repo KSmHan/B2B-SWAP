@@ -56,7 +56,7 @@ test('uploaded stock rows become searchable listings', async () => {
   assert.ok(alu.tags.includes('aluminum') && alu.tags.includes('metal'));
   assert.equal(alu.isStock, true);
   assert.equal(alu.cardId, 'card1');
-  assert.ok(M.CAT_ORDER.includes(alu.wantCat) && alu.wantCat !== alu.cat);
+  assert.equal(alu.wantCat, null); // uploader is open to offers
   assert.equal(listings.find(l => l.material === 'plywood').cat, 'wood');
   assert.equal(dollarPrice('$4.10/kg'), 4.1);
   assert.equal(dollarPrice('$1,200'), 1200);
@@ -81,7 +81,8 @@ test('Russian or English "I have / I need" text reaches uploaded rows', async ()
   const chain = M.findChain(all, starts[0], need, M.MAX_HOPS);
   assert.ok(chain && chain.length >= 2 && chain.length <= 11);
   assert.equal(chain.at(-1).material, 'plywood');
-  for (let i = 1; i < chain.length; i++) assert.equal(chain[i].cat, chain[i - 1].wantCat);
+  // Every hop follows what the previous owner wants (or anything, if open to offers).
+  for (let i = 1; i < chain.length; i++) assert.ok(!chain[i - 1].wantCat || chain[i].cat === chain[i - 1].wantCat);
 
   // English works the same way.
   const en = M.findChain(all, M.findStartCandidates(all, ['copper'], 'copper')[0], withMaterialToken('MDF board', M.tokenize('MDF board')), M.MAX_HOPS);
@@ -104,4 +105,34 @@ test('a word match beats a same-material look-alike ("HDPE" starts from HDPE, no
     { id: 'pub', cat: 'plastic', wantCat: 'wood', title: 'HDPE resin pellets', tags: M.tokenize('HDPE resin pellets'), status: 'live' },
   ];
   assert.equal(M.findStartCandidates(rows, M.tokenize('HDPE'), 'plastic')[0].title, 'HDPE resin pellets');
+});
+
+test('one supplier\'s uploaded list: "Walnut" → "White Oak Lumber" is found (open to offers)', () => {
+  const card = { id: 'tital', company: 'Tital', phone: '1', email: 't@t.co', contactName: 'Ann' };
+  const rows = [
+    { id: 3, category: 'lumber', title: 'White Oak Veneer', qty: '122', price: '$24.00' }, // listed first on purpose
+    { id: 1, category: 'lumber', title: 'Walnut Lumber 4/4', qty: '900', price: '$9.10' },
+    { id: 2, category: 'lumber', title: 'White Oak Lumber 4/4', qty: '1,850', price: '$6.10' },
+    { id: 4, category: 'plywood', title: 'Maple Plywood 3/4 in', qty: '40' },
+  ].map(r => stockItemToListing(Object.assign({ card }, r)));
+  // Published listings whose owners want metal — the old rotation dead-ended here.
+  const pub = [{ id: 'p1', cat: 'metal', wantCat: 'metal', title: 'Test Steel Sheet', tags: ['test', 'steel', 'sheet'], status: 'live' }];
+  const all = rows.concat(pub);
+
+  const start = M.findStartCandidates(all, M.tokenize('Walnut'), null)[0];
+  assert.equal(start.title, 'Walnut Lumber 4/4');
+  const chain = M.findChain(all, start, M.tokenize('White Oak Lumber'), M.MAX_HOPS);
+  assert.ok(chain, 'a chain must be found');
+  assert.deepEqual(chain.map(c => c.title), ['Walnut Lumber 4/4', 'White Oak Lumber 4/4']); // not the veneer
+});
+
+test('open-to-offers nodes are expanded once, so large catalogs stay fast', () => {
+  const card = { id: 'c', company: 'C', phone: '1', email: 'c@c.co' };
+  const rows = [];
+  for (let i = 0; i < 20000; i++) rows.push(stockItemToListing({ id: i, category: 'steel', title: `Steel item ${i}`, card }));
+  rows.push(stockItemToListing({ id: 'x', category: 'copper', title: 'Rare copper busbar', card }));
+  const t = Date.now();
+  const chain = M.findChain(rows, rows[0], ['busbar'], M.MAX_HOPS);
+  assert.equal(chain.at(-1).title, 'Rare copper busbar');
+  assert.ok(Date.now() - t < 1000, `took ${Date.now() - t} ms`);
 });

@@ -191,8 +191,8 @@ function highlightHTML(text, words) {
 }
 function matchReason(it, words, material, cat) {
   const hay = `${it.title} ${it.specs || ''} ${it.desc || ''}`.toLowerCase();
-  const hit = words.find(w => hay.includes(w));
-  if (hit) return `name matches “${hit}”`;
+  const hits = [...new Set(words.filter(w => hay.includes(w)))];
+  if (hits.length) return `name matches “${hits.join(' ')}”`;
   if (material && it.material === material) return `material: ${it.materialLabel || materialInfo(material).label}`;
   if (cat && it.cat === cat) return `category: ${(CATS[cat] || {}).label || cat}`;
   return '';
@@ -226,8 +226,8 @@ function chainNodeHTML(it, i, last, ctx) {
     </div>`;
 }
 function chainLinkHTML(from, to) {
-  const wants = (CATS[to.cat] || {}).label || to.cat;
-  return `<div class="cn-link"><span class="cn-arrow">${linkIconSVG}</span><span class="cn-link-text">${esc(from.owner || 'Owner')} wants<br><b>${esc(wants)}</b></span></div>`;
+  const wants = from.wantCat ? `wants<br><b>${esc((CATS[to.cat] || {}).label || to.cat)}</b>` : 'is<br><b>open to offers</b>';
+  return `<div class="cn-link"><span class="cn-arrow">${linkIconSVG}</span><span class="cn-link-text">${esc(from.owner || 'Owner')} ${wants}</span></div>`;
 }
 
 function renderChainInto(containerEl, path, opts = {}) {
