@@ -41,7 +41,7 @@ async function renderNav(active) {
     ['catalog.html', 'Catalog', 'catalog'],
     ['how-it-works.html#faq', 'FAQ', 'faq'],
   ];
-  const links = items.map(([href, label, key]) => `<a href="${href}" class="${active === key ? 'active' : ''}">${label}</a>`).join('');
+  const links = items.map(([href, label, key]) => `<a href="${href}" class="${active === key ? 'active' : ''}"${active === key ? ' aria-current="page"' : ''}>${label}</a>`).join('');
   const accountLabel = esc(account && account.verified ? (account.company || 'Account') : 'Log in');
   document.getElementById('navRoot').innerHTML = `
     <header class="top">
@@ -49,12 +49,12 @@ async function renderNav(active) {
         <a href="index.html" class="brand">B2B <span class="brand-accent">SWAP</span></a>
         <nav class="nav-center">${links}</nav>
         <div class="top-actions">
-          <a href="account.html" class="login-link">${accountLabel}</a>
+          <a href="account.html" class="login-link ${active === 'account' ? 'active' : ''}">${accountLabel}</a>
           <a href="upload.html" class="btn btn-primary small">Upload stock list</a>
           <button type="button" class="menu-btn" id="menuBtn" aria-label="Menu" aria-expanded="false" aria-controls="mobileMenu"><span></span><span></span><span></span></button>
         </div>
       </div>
-      <nav class="mobile-menu" id="mobileMenu" hidden>${links}<a href="account.html">${accountLabel}</a></nav>
+      <nav class="mobile-menu" id="mobileMenu" hidden>${links}<a href="account.html" class="${active === 'account' ? 'active' : ''}">${accountLabel}</a></nav>
     </header>`;
   // Phones: the menu links live behind the ☰ button.
   const menuBtn = document.getElementById('menuBtn');

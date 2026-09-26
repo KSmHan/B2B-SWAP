@@ -244,3 +244,27 @@ test('"What do you need in return?" is saved on upload and editable by the owner
   assert.equal((await r.json()).card.wants, '');
   assert.equal((await (await fetch(`${base}/${id}`)).json()).card.wants, '');
 });
+
+test('owner can delete one item, and all of their lists at once', async () => {
+  const owner = { 'X-Test-Email': 'del@owner.example' };
+  const a = (await post(Object.assign({}, CONTACT, { email: 'del@owner.example' }), fixture('stock-en.csv'))).body.card.id;
+  const b = (await post(Object.assign({}, CONTACT, { email: 'del@owner.example' }), fixture('stock-ru.xlsx'))).body.card.id;
+  const keep = (await post(Object.assign({}, CONTACT, { email: 'keep@other.example' }), fixture('stock-en.csv'))).body.card.id;
+
+  const card = await (await fetch(`${base}/${a}`, { headers: owner })).json();
+  const before = card.items.length;
+  const del = (id, email) => fetch(`${base}/${a}/items/${id}`, { method: 'DELETE', headers: { 'X-Test-Email': email } });
+  assert.equal((await del(card.items[0].id, 'intruder@example.com')).status, 403);
+  assert.equal((await del(card.items[0].id, 'del@owner.example')).status, 200);
+  assert.equal((await del(card.items[0].id, 'del@owner.example')).status, 404); // already gone
+  const after = await (await fetch(`${base}/${a}`, { headers: owner })).json();
+  assert.equal(after.items.length, before - 1);
+  assert.equal(after.card.itemCount, before - 1);
+
+  assert.equal((await fetch(base, { method: 'DELETE' })).status, 401);
+  const all = await (await fetch(base, { method: 'DELETE', headers: owner })).json();
+  assert.equal(all.deleted, 2);
+  assert.equal((await fetch(`${base}/${a}`)).status, 404);
+  assert.equal((await fetch(`${base}/${b}`)).status, 404);
+  assert.equal((await fetch(`${base}/${keep}`)).status, 200); // someone else's list is untouched
+});
