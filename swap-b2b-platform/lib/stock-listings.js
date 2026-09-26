@@ -31,12 +31,6 @@ function dollarPrice(text) {
   return m ? Number(m[0]) : null;
 }
 
-function hashIndex(s) {
-  let h = 0;
-  for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return h;
-}
-
 /** One stock item (with its card) → listing shape used by /api/listings and the agent. */
 function stockItemToListing(item) {
   const card = item.card || {};
@@ -65,9 +59,9 @@ function stockItemToListing(item) {
     tags,
     wantsText: 'open to offers',
     wantTokens: [],
-    // Uploaders don't say what they want in return, so — like a published
-    // listing that is "open to offers" — they point at a neighbouring category.
-    wantCat: M.nextCatFor(cat, hashIndex(item.id)),
+    // Uploaders don't say what they want in return: they are open to offers,
+    // so the chain search may follow them with any item (see findChain).
+    wantCat: null,
     owner: card.company,
     phone: card.phone,
     email: card.email,
