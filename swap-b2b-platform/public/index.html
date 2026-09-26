@@ -21,12 +21,12 @@
       <div class="search-box">
         <div class="search-field highlight">
           <label>I have</label>
-          <input type="text" id="haveInput" placeholder="e.g. steel sheet, 5 tons" onkeydown="if(event.key==='Enter')document.getElementById('needInput').focus()">
+          <input type="text" id="haveInput" placeholder="e.g. steel sheet, 5 tons" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();askAgent();}">
         </div>
         <div class="search-divider"></div>
         <div class="search-field highlight">
           <label>I need</label>
-          <input type="text" id="needInput" placeholder="e.g. plastic pellets" onkeydown="if(event.key==='Enter')askAgent()">
+          <input type="text" id="needInput" placeholder="e.g. plastic pellets" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();askAgent();}">
         </div>
         <button class="btn btn-primary" onclick="askAgent()">Find matches</button>
       </div>
