@@ -14,7 +14,9 @@
    GET    /api/cards/:id/file?n=             download uploaded file #n (default: latest)
    POST   /api/cards/:id/files               (X-Manage-Key) multipart: file, mode=append|replace
    PATCH  /api/cards/:id                     (X-Manage-Key or owner login) { wants } — what they need in return
+   DELETE /api/cards                         (logged in) remove all of the account's own cards
    DELETE /api/cards/:id                     (X-Manage-Key or owner login) remove the card
+   DELETE /api/cards/:id/items/:itemId       (X-Manage-Key or owner login) remove one item
    PATCH  /api/cards/:id/items/:itemId       (X-Manage-Key or owner login) { category } — fix a material
    ===================================================================== */
 'use strict';
@@ -281,6 +283,30 @@ function createCardsRouter({ store = getDefaultStore(), mailer = require('../mai
   });
 
   // DELETE /api/cards/:id
+  // DELETE /api/cards — every stock list of the logged-in owner ("Delete all" on My materials).
+  router.delete('/', requireLogin, async (req, res) => {
+    const email = ownerEmail(req);
+    let deleted = 0;
+    for (;;) {
+      const cards = await store.listCards({ limit: 50, email });
+      if (!cards.length) break;
+      let round = 0;
+      for (const c of cards) if (await store.deleteCard(c.id)) round++;
+      deleted += round;
+      if (!round) break; // nothing left we can delete — never spin
+    }
+    res.json({ ok: true, deleted });
+  });
+
+  // DELETE /api/cards/:id/items/:itemId — one item of a list.
+  router.delete('/:id/items/:itemId', async (req, res) => {
+    const card = await requireManageKey(req, res);
+    if (!card) return;
+    const ok = await store.deleteItem(card.id, req.params.itemId);
+    if (!ok) return res.status(404).json({ error: 'item_not_found' });
+    res.json({ ok: true });
+  });
+
   router.delete('/:id', async (req, res) => {
     const card = await requireManageKey(req, res);
     if (!card) return;

@@ -21,7 +21,10 @@
         <h2>Your stock, sorted by material</h2>
         <p id="introText">Every item from the stock lists you uploaded, catalogued automatically. Only you can see this page — buyers find your items in the catalog and in "I have / I need" searches.</p>
       </div>
-      <a href="upload.html" class="btn btn-primary">Upload your stock list</a>
+      <div class="btn-row mat-actions">
+        <a href="upload.html" class="btn btn-primary">Upload your stock list</a>
+        <button type="button" class="btn btn-danger" id="deleteAllBtn" hidden>Delete all</button>
+      </div>
     </div>
   </section>
 
@@ -103,9 +106,10 @@ function rowHTML(it){
       <a href="card.html?id=${encodeURIComponent(c.id)}">${esc(c.company)}</a>
       <div class="ct">${esc(c.contactName)} · <a href="tel:${esc((c.phone||'').replace(/[^\d+]/g,''))}">${esc(c.phone)}</a><br><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></div>
     </div>
+    <div class="del"><button type="button" class="btn-del" data-card="${esc(c.id)}" data-item="${esc(it.id)}" title="Delete this item" aria-label="Delete ${esc(it.title)}">Delete</button></div>
   </div>`;
 }
-const HEAD = `<div class="stock-row head"><div>Material</div><div>Item</div><div>Quantity</div><div>Price</div><div>Stock list</div></div>`;
+const HEAD = `<div class="stock-row head"><div>Material</div><div>Item</div><div>Quantity</div><div>Price</div><div>Stock list</div><div></div></div>`;
 
 let reqId = 0;
 async function loadItems(append){
@@ -121,6 +125,8 @@ async function loadItems(append){
   if(my !== reqId) return;
   state.total = data.total;
   document.getElementById('count').textContent = plural(data.total, 'item');
+  // "Delete all" only when there is something of theirs to delete.
+  if(!state.cat && !state.q) document.getElementById('deleteAllBtn').hidden = data.total === 0;
   if(!append){
     list.innerHTML = data.items.length ? HEAD + data.items.map(rowHTML).join('') :
       `<div class="list-empty">${state.q || state.cat ? 'Nothing matches yet.' : 'You haven\'t uploaded a stock list with this account yet.'}<br><a class="btn btn-primary small" href="upload.html">Upload your stock list</a></div>`;
@@ -131,6 +137,46 @@ async function loadItems(append){
   document.getElementById('moreRow').style.display = state.offset < state.total ? 'block' : 'none';
 }
 document.getElementById('moreBtn').onclick = ()=>loadItems(true);
+
+// Delete one item: the row goes away, counts and material chips refresh.
+document.getElementById('list').addEventListener('click', async e=>{
+  const b = e.target.closest('.btn-del');
+  if(!b) return;
+  const row = b.closest('.stock-row');
+  const title = row.querySelector('.t').textContent;
+  if(!confirm(`Delete “${title}” from your stock list?`)) return;
+  b.disabled = true; b.textContent = 'Deleting…';
+  try{
+    await api(`/cards/${encodeURIComponent(b.dataset.card)}/items/${encodeURIComponent(b.dataset.item)}`, { method:'DELETE' });
+    row.remove();
+    state.total = Math.max(0, state.total - 1); state.offset = Math.max(0, state.offset - 1);
+    document.getElementById('count').textContent = plural(state.total, 'item');
+    toast(`Deleted “${title}”.`);
+    renderChips(); loadCompanies();
+    if(!document.querySelector('#list .stock-row:not(.head)')) loadItems(false);
+  }catch(err){
+    b.disabled = false; b.textContent = 'Delete';
+    toast(err.status === 403 ? 'You can only delete items from your own lists.' : 'Could not delete — please try again.');
+  }
+});
+
+// Delete every stock list uploaded with this account.
+document.getElementById('deleteAllBtn').onclick = async ()=>{
+  const btn = document.getElementById('deleteAllBtn');
+  if(!confirm(`Delete ALL your stock lists (${plural(state.total, 'item')})? This cannot be undone.`)) return;
+  btn.disabled = true; btn.textContent = 'Deleting…';
+  try{
+    const r = await api('/cards', { method:'DELETE' });
+    toast(`Deleted ${plural(r.deleted, 'stock list')}.`);
+    state.cat = ''; state.q = ''; state.offset = 0; document.getElementById('q').value = ''; syncUrl();
+    document.getElementById('coSection').style.display = 'none';
+    await renderChips(); await loadItems(false);
+  }catch(err){
+    toast('Could not delete — please try again.');
+  }finally{
+    btn.disabled = false; btn.textContent = 'Delete all';
+  }
+};
 
 let deb;
 document.getElementById('q').addEventListener('input', e=>{

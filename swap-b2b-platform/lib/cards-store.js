@@ -207,6 +207,15 @@ function createSupabaseStore(supabase) {
       return true;
     },
 
+    async deleteItem(cardId, itemId) {
+      const { data, error } = await supabase.from('stock_items')
+        .delete().eq('id', itemId).eq('card_id', cardId).select('id').maybeSingle();
+      if (error) fail('deleteItem', error);
+      if (!data) return false;
+      await this.refreshCardCategories(cardId);
+      return true;
+    },
+
     async updateWants(cardId, wants) {
       const { error } = await supabase.from('stock_cards').update({ wants }).eq('id', cardId);
       if (error && isMissingWantsColumn(error)) {
@@ -319,6 +328,15 @@ function createMemoryStore() {
       if (!it) return false;
       it.category = category;
       cards.get(cardId).categories = countCategories(items.filter(x => x.cardId === cardId));
+      return true;
+    },
+    async deleteItem(cardId, itemId) {
+      const i = items.findIndex(x => x.id === Number(itemId) && x.cardId === cardId);
+      if (i < 0) return false;
+      items.splice(i, 1);
+      const c = cards.get(cardId);
+      const mine = items.filter(x => x.cardId === cardId);
+      Object.assign(c, { itemCount: mine.length, categories: countCategories(mine) });
       return true;
     },
     async deleteCard(id) {
