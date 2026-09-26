@@ -51,6 +51,7 @@
   <section style="padding-top:36px;">
     <div class="result-panel" id="resultPanel">
       <div class="result-answer" id="resultAnswer"></div>
+      <div class="start-picker" id="startPicker"></div>
       <div class="chain-wrap" id="chainSection"></div>
     </div>
   </section>
@@ -73,15 +74,17 @@ renderNav('home');
 renderFooter();
 mountCatalogBrowser(document.getElementById('homeBrowser'), { limit: 12 });
 
-async function askAgent(){
+async function askAgent(startId){
   const have = document.getElementById('haveInput').value.trim();
   const need = document.getElementById('needInput').value.trim();
 
   const panel = document.getElementById('resultPanel');
   const answer = document.getElementById('resultAnswer');
   const chainSection = document.getElementById('chainSection');
+  const picker = document.getElementById('startPicker');
   chainSection.classList.remove('show');
   chainSection.innerHTML = '';
+  picker.innerHTML = '';
   panel.classList.add('show');
   answer.classList.add('thinking');
   answer.textContent = 'reading your request…';
@@ -97,8 +100,10 @@ async function askAgent(){
   answer.textContent = 'searching for a trade chain across listings (up to 10 hops)…';
 
   try{
-    const data = await api('/agent/search', { method:'POST', body:{ have, need } });
+    const data = await api('/agent/search', { method:'POST', body:{ have, need, startId } });
     answer.classList.remove('thinking');
+    const current = data.chain ? data.chain[0] : data.start;
+    if(current) renderStartPicker(picker, data.startOptions, current.id, have);
 
     if(data.status === 'need_more_detail'){
       answer.textContent = data.message;
@@ -122,6 +127,19 @@ async function askAgent(){
     answer.classList.remove('thinking');
     answer.textContent = 'Something went wrong reaching the server — please try again in a moment.';
   }
+}
+
+/** "I have" matched several listings: show them all, the one in use selected;
+ *  picking another re-runs the search from it. */
+function renderStartPicker(el, options, currentId, have){
+  if(!options || options.length < 2){ el.innerHTML = ''; return; }
+  const words = queryWords(have);
+  el.innerHTML = `<div class="sp-head"><b>${options.length} listings match “${esc(have)}”</b> — pick the one you give:</div>
+    <div class="sp-list">${options.map(o => `<button type="button" class="sp-opt ${o.id === currentId ? 'on' : ''}" data-id="${esc(o.id)}">
+      <span class="sp-title">${highlightHTML(o.title, words)}</span>
+      <span class="sp-meta">${esc(o.owner || '')}${o.qty ? ' · ' + esc(o.qty) : ''}${o.isStock || o.price ? ' · ' + esc(valueText(o)) : ''}</span>
+    </button>`).join('')}</div>`;
+  el.querySelectorAll('.sp-opt').forEach(b => b.onclick = () => { if(b.dataset.id !== currentId) askAgent(b.dataset.id); });
 }
 
 function runExample(n){
