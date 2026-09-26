@@ -10,7 +10,8 @@
     { "source": "/materials.html", "destination": "/public/materials.html" },
     { "source": "/card.html", "destination": "/public/card.html" },
     { "source": "/app.js", "destination": "/public/app.js" },
-    { "source": "/styles.css", "destination": "/public/styles.css" }
+    { "source": "/styles.css", "destination": "/public/styles.css" },
+    { "source": "/media/(.*)", "destination": "/public/media/$1" }
   ],
   "crons": [
     { "path": "/api/cron/keepalive", "schedule": "17 9 * * *" }
