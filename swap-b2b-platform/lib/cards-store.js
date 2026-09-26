@@ -129,18 +129,21 @@ function createSupabaseStore(supabase) {
       return (data || []).map(rowToItem);
     },
 
-    async listCards({ limit = 12 } = {}) {
-      const { data, error } = await supabase.from('stock_cards')
+    async listCards({ limit = 12, email } = {}) {
+      let query = supabase.from('stock_cards')
         .select('id,company,contact_name,phone,email,item_count,categories,status,created_at')
-        .eq('status', 'live').order('created_at', { ascending: false }).limit(limit);
+        .eq('status', 'live');
+      if (email) query = query.eq('email', email);
+      const { data, error } = await query.order('created_at', { ascending: false }).limit(limit);
       if (error) fail('listCards', error);
       return (data || []).map(rowToCard);
     },
 
-    async listItems({ category, q, limit = 60, offset = 0 } = {}) {
+    async listItems({ category, q, limit = 60, offset = 0, email } = {}) {
       let query = supabase.from('stock_items')
         .select('id,card_id,position,category,title,qty,unit,price,specs,stock_cards!inner(id,company,contact_name,phone,email,status)', { count: 'exact' })
         .eq('stock_cards.status', 'live');
+      if (email) query = query.eq('stock_cards.email', email);
       if (category) query = query.eq('category', category);
       if (q) query = query.ilike('search_text', likePattern(q));
       const { data, error, count } = await query.order('id', { ascending: false }).range(offset, offset + limit - 1);
@@ -148,7 +151,34 @@ function createSupabaseStore(supabase) {
       return { total: count || 0, items: (data || []).map(rowToItem) };
     },
 
-    async categoryCounts() {
+    /** Every live item with its card, for the catalog and the chain search. */
+    async allLiveItems({ max = 10000 } = {}) {
+      const out = [];
+      for (let from = 0; from < max; from += 1000) {
+        const { data, error } = await supabase.from('stock_items')
+          .select('id,card_id,position,category,title,qty,unit,price,specs,stock_cards!inner(id,company,contact_name,phone,email,status)')
+          .eq('stock_cards.status', 'live').order('id', { ascending: false }).range(from, from + 999);
+        if (error) fail('allLiveItems', error);
+        out.push(...(data || []).map(rowToItem));
+        if (!data || data.length < 1000) break;
+      }
+      return out;
+    },
+
+    async categoryCounts({ email } = {}) {
+      if (email) {
+        // One owner's items only: count them directly (the view is site-wide).
+        const counts = {};
+        for (let from = 0; from < 20000; from += 1000) {
+          const { data, error } = await supabase.from('stock_items')
+            .select('category,stock_cards!inner(email,status)')
+            .eq('stock_cards.status', 'live').eq('stock_cards.email', email).range(from, from + 999);
+          if (error) fail('categoryCounts', error);
+          (data || []).forEach(r => { counts[r.category] = (counts[r.category] || 0) + 1; });
+          if (!data || data.length < 1000) break;
+        }
+        return counts;
+      }
       const { data, error } = await supabase.from('stock_category_counts').select('category,n');
       if (error) fail('categoryCounts', error);
       const out = {};
@@ -238,20 +268,26 @@ function createMemoryStore() {
       return this.getCard(cardId);
     },
     async cardItems(cardId) { return items.filter(it => it.cardId === cardId).map(it => Object.assign({}, it)); },
-    async listCards({ limit = 12 } = {}) {
-      return [...cards.values()].filter(c => c.status === 'live').sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);
+    async listCards({ limit = 12, email } = {}) {
+      return [...cards.values()].filter(c => c.status === 'live' && (!email || c.email === email))
+        .sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);
     },
-    async listItems({ category, q, limit = 60, offset = 0 } = {}) {
+    async allLiveItems() {
+      return items.filter(live).sort((a, b) => b.id - a.id).map(withCard);
+    },
+    async listItems({ category, q, limit = 60, offset = 0, email } = {}) {
       const needle = q ? String(q).toLowerCase() : '';
       const all = items.filter(live)
+        .filter(it => !email || cards.get(it.cardId).email === email)
         .filter(it => !category || it.category === category)
         .filter(it => !needle || `${it.title} ${it.specs || ''}`.toLowerCase().includes(needle))
         .sort((a, b) => b.id - a.id);
       return { total: all.length, items: all.slice(offset, offset + limit).map(withCard) };
     },
-    async categoryCounts() {
+    async categoryCounts({ email } = {}) {
       const out = {};
-      items.filter(live).forEach(it => { out[it.category] = (out[it.category] || 0) + 1; });
+      items.filter(live).filter(it => !email || cards.get(it.cardId).email === email)
+        .forEach(it => { out[it.category] = (out[it.category] || 0) + 1; });
       return out;
     },
     async updateItemCategory(cardId, itemId, category) {

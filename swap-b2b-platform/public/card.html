@@ -27,13 +27,15 @@ renderFooter();
 const params = new URLSearchParams(location.search);
 const cardId = params.get('id') || '';
 const manageKey = params.get('key') || '';
+// The manage link, or being logged in with the email the list was uploaded with.
+const canManage = () => !!manageKey || !!(card && card.isOwner);
 let card = null, items = [], filterCat = '';
 
 function header(){
   const telHref = (card.phone || '').replace(/[^\d+]/g, '');
   const date = card.createdAt ? new Date(card.createdAt).toLocaleDateString() : '';
   return `
-  ${manageKey ? `<div class="owner-bar">
+  ${canManage() ? `<div class="owner-bar">
       <span><b>You're managing this card.</b> Upload more stock or fix any material below — changes save instantly.</span>
       <span class="owner-actions">
         <label class="btn btn-primary small" for="addFileInput">⬆ Upload file</label>
@@ -99,7 +101,7 @@ function rows(){
   return `<div class="stock-list">
     <div class="stock-row no-co head"><div>Material</div><div>Item</div><div>Quantity</div><div>Price</div></div>
     ${list.map(it=>`<div class="stock-row no-co">
-      <div class="m">${manageKey ? categorySelect(it) : materialTag(it.category)}</div>
+      <div class="m">${canManage() ? categorySelect(it) : materialTag(it.category)}</div>
       <div class="ti"><div class="t">${esc(it.title)}</div>${it.specs ? `<div class="s">${esc(it.specs)}</div>` : ''}</div>
       <div class="q">${esc(qtyText(it))}</div>
       <div class="p">${esc(it.price || '')}</div>

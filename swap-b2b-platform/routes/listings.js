@@ -4,11 +4,22 @@ const express = require('express');
 const db = require('../db');
 const M = require('../matching');
 const { requireVerifiedProfile } = require('../auth-mw');
+const { getDefaultStore } = require('../lib/cards-store');
+const { stockItemToListing, withMaterialToken } = require('../lib/stock-listings');
 
 const router = express.Router();
 
-async function allListings() {
-  return db.allUserListings();
+/** Hand-published listings plus every row of every uploaded stock list. */
+async function allListings({ store = getDefaultStore() } = {}) {
+  const [own, stock] = await Promise.all([
+    db.allUserListings(),
+    store.allLiveItems().then(items => items.map(stockItemToListing)).catch(err => {
+      // A stock-card outage must not take the catalog and the agent down with it.
+      console.error('[listings] stock items unavailable:', err.message);
+      return [];
+    }),
+  ]);
+  return own.concat(stock);
 }
 
 function publicListing(l) {
@@ -27,10 +38,16 @@ router.get('/', async (req, res) => {
   if (cash === '1') list = list.filter(it => it.cashOk);
   if (price) {
     const [lo, hi] = price.split('-').map(Number);
-    list = list.filter(it => it.price >= lo && it.price <= hi);
+    // Stock rows priced in other currencies (or not at all) can't be placed in a $ band.
+    list = list.filter(it => typeof it.price === 'number' && it.price >= lo && it.price <= hi);
   }
   if (q) {
-    list = list.filter(it => (it.title + ' ' + it.desc + ' ' + it.wantsText + ' ' + (it.condition || '')).toLowerCase().includes(q));
+    // "алюминий" also finds "Aluminum sheet" / "Лист алюминиевый": match the material type too.
+    const needles = [q, ...withMaterialToken(search, [])];
+    list = list.filter(it => {
+      const hay = (it.title + ' ' + (it.desc || '') + ' ' + (it.specs || '') + ' ' + it.wantsText + ' ' + (it.condition || '') + ' ' + (it.material || '')).toLowerCase();
+      return needles.some(n => hay.includes(n));
+    });
   }
   res.json({ count: list.length, listings: list.map(publicListing) });
 });

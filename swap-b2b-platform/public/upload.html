@@ -38,6 +38,7 @@
             <label for="email">Email <span class="req">*</span></label>
             <input type="email" id="email" name="email" autocomplete="email" inputmode="email" placeholder="you@company.com" required>
             <div class="field-error" data-for="email"></div>
+            <div class="up-note" id="emailHint" style="text-align:left;margin-top:6px;"></div>
           </div>
           <div class="field">
             <label for="phone">Phone <span class="req">*</span></label>
@@ -96,6 +97,23 @@
 renderNav('upload');
 renderFooter();
 loadMaterials().catch(()=>{});
+
+// Logged in: fill in the account's details and tie the list to the account email,
+// so it shows up under "My materials".
+(async ()=>{
+  const hint = document.getElementById('emailHint');
+  let me = null;
+  try{ me = (await api('/auth/me')).account; }catch(_){}
+  if(me && me.verified){
+    const email = document.getElementById('email');
+    email.value = me.email; email.readOnly = true;
+    if(me.company && !document.getElementById('company').value) document.getElementById('company').value = me.company;
+    if(me.phone && !document.getElementById('phone').value) document.getElementById('phone').value = me.phone;
+    hint.textContent = 'Linked to your account — this list will appear under My materials.';
+  } else {
+    hint.innerHTML = '<a class="btn-link" href="account.html">Log in</a> with this email to see and manage the list under My materials.';
+  }
+})();
 
 const MAX_MB = 4;
 document.getElementById('maxMb').textContent = MAX_MB;

@@ -14,6 +14,12 @@ let base, server;
 
 test.before(async () => {
   const app = express();
+  // Stand-in for auth-mw's attachAccount: "X-Test-Email" = a logged-in, verified account.
+  app.use((req, res, next) => {
+    const email = req.get('X-Test-Email');
+    req.account = email ? { id: 'acc-' + email, email, verified: true, company: 'Acme' } : null;
+    next();
+  });
   const mailer = { sendMail: async (m) => { sent.push(m); return { sent: true }; } };
   app.use('/api/cards', createCardsRouter({ store: createMemoryStore(), mailer, uploadLimit: (req, res, next) => next() }));
   app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: 'internal_error' }); });
@@ -57,17 +63,18 @@ test('card page data, catalogue filters, search and original file download', asy
   assert.equal(card.card.hasFile, true);
   assert.equal(card.items.length, 6);
 
-  const mdf = await (await fetch(`${base}/items?cat=mdf`)).json();
+  const owner = { headers: { 'X-Test-Email': 'ivan@example.com' } };
+  const mdf = await (await fetch(`${base}/items?cat=mdf`, owner)).json();
   assert.ok(mdf.items.length >= 1 && mdf.items.every(i => i.category === 'mdf'));
   assert.ok(mdf.items[0].card.company && mdf.items[0].card.phone);
 
-  const search = await (await fetch(`${base}/items?q=${encodeURIComponent('birch plywood')}`)).json();
+  const search = await (await fetch(`${base}/items?q=${encodeURIComponent('birch plywood')}`, owner)).json();
   // Earlier Excel uploads in this store also carry "Birch plywood 18mm".
   assert.ok(search.total >= 1);
   assert.ok(search.items.every(i => /birch plywood/i.test(i.title)));
   assert.ok(search.items.some(i => i.card.id === id));
 
-  const mats = await (await fetch(`${base}/materials`)).json();
+  const mats = await (await fetch(`${base}/materials`, owner)).json();
   assert.ok(mats.materials.find(m => m.key === 'aluminum').count >= 9);
 
   const file = await fetch(`${base}/${id}/file`);
@@ -75,7 +82,7 @@ test('card page data, catalogue filters, search and original file download', asy
   assert.match(file.headers.get('content-disposition'), /stock-en\.csv/);
   assert.equal(Buffer.from(await file.arrayBuffer()).toString(), fixture('stock-en.csv').data.toString());
 
-  const list = await (await fetch(base)).json();
+  const list = await (await fetch(base, owner)).json();
   assert.equal(list.cards[0].id, id);
   assert.ok(sent.some(m => m.to === 'ivan@example.com' && m.text.includes(id)));
 });
@@ -176,4 +183,48 @@ test('owner adds a second file (append) and replaces the list; each file stays d
   assert.equal(card.items.length, 11);
   assert.ok(!card.items.some(i => i.title === 'Aluminum sheet'));
   assert.equal((await fetch(`${base}/${id}/file?n=1`)).status, 404);
+});
+
+test('"My materials" is private: only the logged-in owner sees their own items', async () => {
+  const { body } = await post(Object.assign({}, CONTACT, { email: 'solo@private.example', company: 'Solo Metals' }), fixture('stock-en.csv'));
+  const as = (email) => ({ headers: email ? { 'X-Test-Email': email } : {} });
+
+  for (const path of ['/items', '/materials', '']) {
+    assert.equal((await fetch(`${base}${path}`)).status, 401, `anonymous ${path || '/'}`);
+  }
+  const mine = await (await fetch(`${base}/items`, as('solo@private.example'))).json();
+  assert.equal(mine.total, 6);
+  assert.ok(mine.items.every(i => i.card.id === body.card.id));
+  const counts = (await (await fetch(`${base}/materials`, as('solo@private.example'))).json()).materials;
+  assert.equal(counts.reduce((n, m) => n + m.count, 0), 6);
+  const cards = (await (await fetch(base, as('solo@private.example'))).json()).cards;
+  assert.deepEqual(cards.map(c => c.id), [body.card.id]);
+
+  const other = await (await fetch(`${base}/items`, as('someone@else.example'))).json();
+  assert.equal(other.total, 0);
+  assert.equal((await (await fetch(`${base}/material-types`)).json()).materials.length > 10, true);
+});
+
+test('owner logged in with the card email can manage it without the manage link', async () => {
+  const { body } = await post(Object.assign({}, CONTACT, { email: 'boss@owner.example' }), fixture('stock-en.csv'));
+  const id = body.card.id;
+  const card = await (await fetch(`${base}/${id}`, { headers: { 'X-Test-Email': 'boss@owner.example' } })).json();
+  assert.equal(card.card.isOwner, true);
+  assert.equal((await (await fetch(`${base}/${id}`)).json()).card.isOwner, false);
+
+  const item = card.items[0];
+  const patch = (email) => fetch(`${base}/${id}/items/${item.id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Test-Email': email }, body: JSON.stringify({ category: 'copper' }),
+  });
+  assert.equal((await patch('intruder@example.com')).status, 403);
+  assert.equal((await patch('boss@owner.example')).status, 200);
+  assert.equal((await fetch(`${base}/${id}`, { method: 'DELETE', headers: { 'X-Test-Email': 'boss@owner.example' } })).status, 200);
+});
+
+test('a logged-in upload is tied to the account email, whatever the form says', async () => {
+  const fd = form(Object.assign({}, CONTACT, { email: 'typed@elsewhere.example' }), fixture('stock-en.csv'));
+  const res = await fetch(base, { method: 'POST', body: fd, headers: { 'X-Test-Email': 'acct@owner.example' } });
+  const body = await res.json();
+  assert.equal(res.status, 201);
+  assert.equal(body.card.email, 'acct@owner.example');
 });

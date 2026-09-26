@@ -4,14 +4,17 @@
    email and phone. Every row is catalogued by material automatically.
 
    POST   /api/cards                         multipart: company, contactName, email, phone, file
-   GET    /api/cards                         recent cards
-   GET    /api/cards/materials               material types with live item counts
-   GET    /api/cards/items?cat=&q=&offset=   catalogue items across all cards
+   GET    /api/cards                         (logged in) the account's own cards
+   GET    /api/cards/materials               (logged in) material types with the account's item counts
+   GET    /api/cards/items?cat=&q=&offset=   (logged in) the account's own items
+
+   "Own" = cards uploaded with the account's verified email. The public
+   catalog and the chain search see every card via /api/listings instead.
    GET    /api/cards/:id                     one card + its items
    GET    /api/cards/:id/file?n=             download uploaded file #n (default: latest)
    POST   /api/cards/:id/files               (X-Manage-Key) multipart: file, mode=append|replace
-   DELETE /api/cards/:id                     (X-Manage-Key) remove the card
-   PATCH  /api/cards/:id/items/:itemId       (X-Manage-Key) { category } — fix a material
+   DELETE /api/cards/:id                     (X-Manage-Key or owner login) remove the card
+   PATCH  /api/cards/:id/items/:itemId       (X-Manage-Key or owner login) { category } — fix a material
    ===================================================================== */
 'use strict';
 
@@ -55,6 +58,19 @@ function countCategories(items) {
   const out = {};
   items.forEach(it => { out[it.category] = (out[it.category] || 0) + 1; });
   return out;
+}
+
+/** The logged-in account owns a card uploaded with its (verified) email. */
+function ownerEmail(req) {
+  return req.account && req.account.verified && req.account.email ? String(req.account.email).toLowerCase() : null;
+}
+function isOwner(req, card) {
+  const email = ownerEmail(req);
+  return !!(email && card && card.email === email);
+}
+function requireLogin(req, res, next) {
+  if (!ownerEmail(req)) return res.status(401).json({ error: 'not_authenticated', message: 'Log in to see your materials.' });
+  next();
 }
 
 function createCardsRouter({ store = getDefaultStore(), mailer = require('../mailer'), uploadLimit } = {}) {
@@ -120,7 +136,8 @@ function createCardsRouter({ store = getDefaultStore(), mailer = require('../mai
     if (!card) { res.status(404).json({ error: 'not_found' }); return null; }
     const key = req.get('X-Manage-Key') || '';
     const admin = process.env.ADMIN_TOKEN;
-    const ok = (key && safeEqual(hashToken(key), card.manageTokenHash)) || (admin && admin.length >= 16 && safeEqual(key, admin));
+    const ok = (key && safeEqual(hashToken(key), card.manageTokenHash)) || (admin && admin.length >= 16 && safeEqual(key, admin)) ||
+      isOwner(req, card);
     if (!ok) { res.status(403).json({ error: 'forbidden', message: 'This manage link is not valid for this card.' }); return null; }
     return card;
   }
@@ -132,7 +149,8 @@ function createCardsRouter({ store = getDefaultStore(), mailer = require('../mai
 
     const company = field(b.company, 120);
     const contactName = field(b.contactName, 80);
-    const email = field(b.email, 160).toLowerCase();
+    // Logged in: the card always belongs to the account, so it shows under "My materials".
+    const email = ownerEmail(req) || field(b.email, 160).toLowerCase();
     const phone = field(b.phone, 30);
     const errors = {};
     if (company.length < 2) errors.company = 'Enter your company name.';
@@ -176,26 +194,31 @@ function createCardsRouter({ store = getDefaultStore(), mailer = require('../mai
     });
   });
 
-  // GET /api/cards
-  router.get('/', async (req, res) => {
+  // GET /api/cards — the logged-in account's own cards
+  router.get('/', requireLogin, async (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 50);
-    const cards = await store.listCards({ limit });
+    const cards = await store.listCards({ limit, email: ownerEmail(req) });
     res.json({ cards: cards.map(publicCard) });
   });
 
-  // GET /api/cards/materials
-  router.get('/materials', async (req, res) => {
-    const counts = await store.categoryCounts();
+  // GET /api/cards/materials — material types with the account's own item counts
+  router.get('/materials', requireLogin, async (req, res) => {
+    const counts = await store.categoryCounts({ email: ownerEmail(req) });
     res.json({ materials: listMaterials().map(m => Object.assign(m, { count: counts[m.key] || 0 })) });
   });
 
-  // GET /api/cards/items
-  router.get('/items', async (req, res) => {
+  // GET /api/cards/material-types — the list of material types (public; used for labels)
+  router.get('/material-types', (req, res) => {
+    res.json({ materials: listMaterials() });
+  });
+
+  // GET /api/cards/items — the account's own items
+  router.get('/items', requireLogin, async (req, res) => {
     const category = isMaterial(req.query.cat) ? req.query.cat : '';
     const q = field(req.query.q, 80);
     const limit = Math.min(Math.max(Number(req.query.limit) || 60, 1), 100);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
-    const result = await store.listItems({ category, q, limit, offset });
+    const result = await store.listItems({ category, q, limit, offset, email: ownerEmail(req) });
     res.json(result);
   });
 
@@ -204,7 +227,7 @@ function createCardsRouter({ store = getDefaultStore(), mailer = require('../mai
     const card = await store.getCard(req.params.id);
     if (!card || card.status !== 'live') return res.status(404).json({ error: 'not_found' });
     const items = await store.cardItems(card.id);
-    res.json({ card: Object.assign(publicCard(card), { hasFile: card.files.some(f => f.path) }), items });
+    res.json({ card: Object.assign(publicCard(card), { hasFile: card.files.some(f => f.path), isOwner: isOwner(req, card) }), items });
   });
 
   // GET /api/cards/:id/file

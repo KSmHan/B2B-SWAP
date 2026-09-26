@@ -55,6 +55,15 @@
       <div class="chain-wrap" id="chainSection"></div>
     </div>
   </section>
+
+  <section class="border-t" id="browse">
+    <div class="section-head" style="text-align:left;max-width:1100px;margin-bottom:24px;">
+      <div class="eyebrow">CATALOG</div>
+      <h2>Browse surplus on B2B SWAP</h2>
+      <p>Search by name, filter by category and price — including every item from uploaded stock lists.</p>
+    </div>
+    <div id="homeBrowser"></div>
+  </section>
 </main>
 
 <div id="footRoot"></div>
@@ -63,6 +72,7 @@
 <script>
 renderNav('home');
 renderFooter();
+mountCatalogBrowser(document.getElementById('homeBrowser'), { limit: 12 });
 
 async function askAgent(){
   const have = document.getElementById('haveInput').value.trim();
@@ -97,7 +107,7 @@ async function askAgent(){
     }
     if(data.status === 'no_start_match' || data.status === 'no_chain'){
       const alt = data.suggestions && data.suggestions.length
-        ? ` Similar listings on B2B SWAP: ${data.suggestions.map(a=>`"${a.title}" (~$${a.price})`).join(', ')}.`
+        ? ` Similar listings on B2B SWAP: ${data.suggestions.map(a=>`"${a.title}" (${valueText(a)})`).join(', ')}.`
         : '';
       answer.textContent = data.message + alt;
       return;
@@ -105,9 +115,9 @@ async function askAgent(){
 
     const path = data.chain;
     if(path.length === 1){
-      answer.textContent = `"${path[0].title}" already matches what you're after. Estimated value: ~$${path[0].price.toLocaleString()}.`;
+      answer.textContent = `"${path[0].title}" already matches what you're after. Price: ${valueText(path[0])}.`;
     } else {
-      answer.textContent = `Found a chain with ${data.hops} hop${data.hops===1?'':'s'}: you give up "${path[0].title}" (~$${path[0].price.toLocaleString()}) → you receive "${path[path.length-1].title}" (~$${path[path.length-1].price.toLocaleString()}). Full chain below, with contacts and pickup details.`;
+      answer.textContent = `Found a chain with ${data.hops} hop${data.hops===1?'':'s'}: you give up "${path[0].title}" (${valueText(path[0])}) → you receive "${path[path.length-1].title}" (${valueText(path[path.length-1])}). Full chain below, with contacts and pickup details.`;
     }
     renderChainInto(chainSection, path);
   } catch(err){
