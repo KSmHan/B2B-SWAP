@@ -175,6 +175,17 @@ function titleScore(words, it) {
   return words.filter(w => title.includes(w)).length;
 }
 
+/** By-products and processed forms. A request that names only the material
+ *  ("Walnut") means the material itself — the lumber, not the veneer or the
+ *  offcuts — so these lose ties unless the request asks for them. */
+const SECONDARY_FORM = /\b(veneers?|scrap|offcuts?|off-cuts?|remnants?|waste|shavings|sawdust|dust|trimmings?|edge\s*banding)\b|шпон|отход|обрез|стружк|опилк|лом(?![а-яё])/i;
+function secondaryPenalty(words, it) {
+  const m = String(it.title || '').match(SECONDARY_FORM);
+  if (!m) return 0;
+  const form = m[0].toLowerCase();
+  return words.some(w => form.includes(w) || w.includes(form)) ? 0 : 0.05;
+}
+
 function findStartCandidates(allItems, words, material) {
   return allItems
     .filter(it => it.status === 'live')
@@ -182,7 +193,7 @@ function findStartCandidates(allItems, words, material) {
       // Same material as requested: an uploaded row of it, or a listing naming it.
       const sameMaterial = material && (it.material === material || (!it.material && score([material], it.tags) > 0));
       const s = score(words, it.tags);
-      return { it, s: s + (sameMaterial ? 0.5 : 0) + (s ? titleScore(words, it) * 0.1 : 0) };
+      return { it, s: s + (sameMaterial ? 0.5 : 0) + (s ? titleScore(words, it) * 0.1 - secondaryPenalty(words, it) : 0) };
     })
     .filter(x => x.s > 0)
     .sort((a, b) => b.s - a.s)
@@ -213,7 +224,10 @@ function findChain(allItems, start, wantTokens, maxHops) {
 function findChains(allItems, start, wantTokens, maxHops, maxAlternatives = 20) {
   const wantCatGeneric = detectCategory(wantTokens);
   const hasWant = wantTokens.length > 0;
-  const matchScore = (it) => score(wantTokens, it.tags) + (wantCatGeneric && it.cat === wantCatGeneric ? 1 : 0) + titleScore(wantTokens, it) * 0.5;
+  const matchScore = (it) => {
+    const s = score(wantTokens, it.tags) + (wantCatGeneric && it.cat === wantCatGeneric ? 1 : 0) + titleScore(wantTokens, it) * 0.5;
+    return s ? s - secondaryPenalty(wantTokens, it) : 0;
+  };
   const startCats = start.wantCats && start.wantCats.length ? start.wantCats : (start.wantCat ? [start.wantCat] : []);
   const satisfied = (it) => (hasWant ? matchScore(it) > 0 : (!startCats.length || startCats.includes(it.cat)));
 
