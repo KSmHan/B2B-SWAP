@@ -30,64 +30,6 @@ const CATS = {
   packaging:  { label: 'Packaging & Containers' },
 };
 
-/* ---------------- category illustrations (pure client-side SVG) ---------------- */
-let _photoUid = 0;
-function catPhoto(cat, uid) {
-  const u = String(uid !== undefined ? uid : _photoUid++).replace(/[^\w-]/g, '');
-  const g = `g${String(cat).replace(/[^\w-]/g, '')}${u}`;
-  if (cat === 'metal') {
-    return `<svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
-      <defs><linearGradient id="${g}bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E9EDF6"/><stop offset="1" stop-color="#D7DEEE"/></linearGradient>
-      <linearGradient id="${g}m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#B9C4DC"/><stop offset=".5" stop-color="#8FA0C4"/><stop offset="1" stop-color="#6F82AC"/></linearGradient></defs>
-      <rect width="400" height="300" fill="url(#${g}bg)"/>
-      <rect x="30" y="70" width="340" height="26" rx="3" fill="url(#${g}m)"/>
-      <rect x="30" y="104" width="340" height="26" rx="3" fill="url(#${g}m)" opacity=".92"/>
-      <rect x="30" y="138" width="340" height="26" rx="3" fill="url(#${g}m)" opacity=".84"/>
-      <rect x="30" y="172" width="340" height="26" rx="3" fill="url(#${g}m)" opacity=".76"/>
-      <rect x="30" y="206" width="340" height="26" rx="3" fill="url(#${g}m)" opacity=".68"/>
-      <circle cx="55" cy="83" r="4" fill="#5A6B90"/><circle cx="345" cy="83" r="4" fill="#5A6B90"/>
-    </svg>`;
-  }
-  if (cat === 'wood') {
-    return `<svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
-      <defs><linearGradient id="${g}bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FBF3E6"/><stop offset="1" stop-color="#F3E4CC"/></linearGradient>
-      <linearGradient id="${g}w" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#D9B27C"/><stop offset=".5" stop-color="#C99A5E"/><stop offset="1" stop-color="#B8864A"/></linearGradient></defs>
-      <rect width="400" height="300" fill="url(#${g}bg)"/>
-      <g stroke="#9C6F37" stroke-width="1.2"><rect x="40" y="190" width="320" height="34" rx="2" fill="url(#${g}w)"/><rect x="55" y="152" width="300" height="34" rx="2" fill="url(#${g}w)" opacity=".92"/><rect x="70" y="114" width="280" height="34" rx="2" fill="url(#${g}w)" opacity=".85"/><rect x="85" y="76" width="260" height="34" rx="2" fill="url(#${g}w)" opacity=".78"/></g>
-      <g stroke="#A97A42" stroke-width="1" opacity=".45" fill="none"><path d="M60 207 q60 -8 120 0 t120 0"/><path d="M75 169 q60 -8 120 0 t110 0"/><path d="M90 131 q60 -8 110 0 t100 0"/></g>
-    </svg>`;
-  }
-  if (cat === 'plastic') {
-    let dots = '';
-    const cols = ['#FFB37A', '#FF9A52', '#FFCB9B', '#F4894A', '#FFD9B8'];
-    for (let i = 0; i < 70; i++) {
-      const x = 20 + (i * 53) % 370, y = 30 + Math.floor(i / 8) * 34 + (i % 3) * 4, r = 8 + (i % 4);
-      dots += `<circle cx="${x}" cy="${y}" r="${r}" fill="${cols[i % cols.length]}" opacity="${0.55 + ((i % 5) * 0.09)}"/>`;
-    }
-    return `<svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
-      <defs><linearGradient id="${g}bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF3E9"/><stop offset="1" stop-color="#FFE6D2"/></linearGradient></defs>
-      <rect width="400" height="300" fill="url(#${g}bg)"/>${dots}</svg>`;
-  }
-  if (cat === 'components') {
-    return `<svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
-      <defs><linearGradient id="${g}bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E7F8F1"/><stop offset="1" stop-color="#D3F0E3"/></linearGradient>
-      <linearGradient id="${g}m" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5FC79B"/><stop offset="1" stop-color="#2E9B72"/></linearGradient></defs>
-      <rect width="400" height="300" fill="url(#${g}bg)"/>
-      <g fill="none" stroke="url(#${g}m)" stroke-width="10"><circle cx="150" cy="150" r="58"/><circle cx="150" cy="150" r="24" fill="url(#${g}bg)"/></g>
-      <g fill="url(#${g}m)"><rect x="145" y="70" width="10" height="22"/><rect x="145" y="208" width="10" height="22"/><rect x="70" y="145" width="22" height="10"/><rect x="208" y="145" width="22" height="10"/></g>
-      <g fill="none" stroke="#2E9B72" stroke-width="7" opacity=".6"><circle cx="285" cy="90" r="30"/></g>
-      <g fill="#2E9B72" opacity=".6"><rect x="280" y="48" width="10" height="16"/><rect x="280" y="116" width="10" height="16"/><rect x="248" y="85" width="16" height="10"/><rect x="306" y="85" width="16" height="10"/></g>
-    </svg>`;
-  }
-  return `<svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
-      <defs><linearGradient id="${g}bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF0F2"/><stop offset="1" stop-color="#FFE1E6"/></linearGradient>
-      <linearGradient id="${g}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E3A9AF"/><stop offset="1" stop-color="#C98088"/></linearGradient></defs>
-      <rect width="400" height="300" fill="url(#${g}bg)"/>
-      <g fill="url(#${g}b)" stroke="#B06D75" stroke-width="1.5"><rect x="40" y="150" width="90" height="80" rx="3"/><rect x="140" y="120" width="90" height="110" rx="3"/><rect x="240" y="160" width="90" height="70" rx="3"/></g>
-      <g stroke="#8E4C54" stroke-width="1.5" opacity=".55"><line x1="85" y1="150" x2="85" y2="230"/><line x1="185" y1="120" x2="185" y2="230"/><line x1="285" y1="160" x2="285" y2="230"/></g>
-    </svg>`;
-}
-
 /* ---------------- nav / footer ---------------- */
 async function renderNav(active) {
   let account = null;
@@ -218,7 +160,7 @@ function chainNodeHTML(it, i, last, ctx, opt = {}) {
   const tag = it.materialLabel || (CATS[it.cat] || {}).label || '';
   const tel = String(it.phone || '').replace(/[^\d+]/g, '');
   return `<div class="cn cn-${role}">
-      <div class="cn-photo">${catPhoto(it.cat)}<span class="cn-role">${label}</span></div>
+      <div class="cn-top"><span class="cn-role">${label}</span></div>
       <div class="cn-body">
         ${tag ? `<span class="mat-tag">${esc(tag)}</span>` : ''}
         <div class="cn-title">${highlightHTML(it.title, words)}</div>
@@ -374,8 +316,7 @@ function listingCardHTML(it) {
     ? `<div class="item-wants">${esc(it.materialLabel || '')} · wants: ${esc(it.wantsText || 'open to offers')}</div>`
     : `<div class="item-wants">wants: ${esc(it.wantsText)}</div>`;
   return `<div class="item-card">
-    <div class="item-photo">
-      ${catPhoto(it.cat, it.id)}
+    <div class="item-top">
       <span class="cat-tag">${esc(meta.label)}</span>
       ${it.cashOk ? `<span class="cash-tag">+ top-up ${esc(it.cashRange)}</span>` : ''}
     </div>
