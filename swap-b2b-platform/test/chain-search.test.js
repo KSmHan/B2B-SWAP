@@ -136,3 +136,23 @@ test('open-to-offers nodes are expanded once, so large catalogs stay fast', () =
   assert.equal(chain.at(-1).title, 'Rare copper busbar');
   assert.ok(Date.now() - t < 1000, `took ${Date.now() - t} ms`);
 });
+
+test('"What do you need in return?" steers the chain', () => {
+  const { wantsFields } = require('../lib/stock-listings');
+  assert.deepEqual(wantsFields('plywood, packaging').wantCats, ['wood', 'packaging']);
+  assert.deepEqual(wantsFields('фанера или поддоны').wantCats, ['wood', 'packaging']);
+  assert.deepEqual(wantsFields('').wantCats, []);
+
+  const mk = (id, category, title, company, wants) => stockItemToListing({ id, category, title, card: { id: company, company, phone: '1', email: company + '@x.co', wants } });
+  const rows = [
+    mk(1, 'steel', 'Steel plate 10mm', 'SteelCo', 'plywood'),        // SteelCo only wants wood
+    mk(2, 'plywood', 'Birch plywood 18mm', 'WoodCo', 'copper'),      // WoodCo wants copper
+    mk(3, 'copper', 'Copper busbar', 'CuCo', ''),                    // CuCo open to offers
+    mk(4, 'plastic', 'HDPE pellets', 'PlastCo', ''),
+  ];
+  assert.equal(rows[0].wantsText, 'plywood');
+  assert.equal(rows[0].wantCat, 'wood');
+  // SteelCo can't jump straight to plastics: it only takes wood, so the chain goes through WoodCo → CuCo.
+  const chain = M.findChain(rows, rows[0], M.tokenize('HDPE pellets'), M.MAX_HOPS);
+  assert.deepEqual(chain.map(c => c.title), ['Steel plate 10mm', 'Birch plywood 18mm', 'Copper busbar', 'HDPE pellets']);
+});

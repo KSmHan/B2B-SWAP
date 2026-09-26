@@ -31,6 +31,24 @@ function dollarPrice(text) {
   return m ? Number(m[0]) : null;
 }
 
+/** The card owner's wish ("plywood, packaging") → the fields the chain search reads.
+ *  The category comes from the words (matching.js) or the material named ("фанера"). */
+function wantsFields(wants) {
+  const text = String(wants || '').trim();
+  if (!text) return { wantsText: 'open to offers', wantTokens: [], wantCat: null, wantCats: [] };
+  const tokens = withMaterialToken(text, M.tokenize(text));
+  // Every category named ("plywood, packaging" → wood + packaging), per phrase.
+  const cats = new Set();
+  for (const part of text.split(/[,;/]|\s+(?:or|and|или|и)\s+/i)) {
+    const t = M.tokenize(part);
+    const material = classify(part);
+    const cat = M.detectCategory(withMaterialToken(part, t)) || (material ? catForMaterial(material) : null);
+    if (cat) cats.add(cat);
+  }
+  const wantCats = [...cats];
+  return { wantsText: text, wantTokens: tokens, wantCat: wantCats[0] || null, wantCats };
+}
+
 /** One stock item (with its card) → listing shape used by /api/listings and the agent. */
 function stockItemToListing(item) {
   const card = item.card || {};
@@ -57,11 +75,9 @@ function stockItemToListing(item) {
     priceText: item.price || '',
     specs: item.specs || label,
     tags,
-    wantsText: 'open to offers',
-    wantTokens: [],
-    // Uploaders don't say what they want in return: they are open to offers,
-    // so the chain search may follow them with any item (see findChain).
-    wantCat: null,
+    // "What do you need in return?" from the upload form. Left empty, the
+    // owner is open to offers and the chain search may follow them with any item.
+    ...wantsFields(card.wants),
     owner: card.company,
     phone: card.phone,
     email: card.email,
@@ -84,4 +100,4 @@ function withMaterialToken(text, tokens) {
   return key && !tokens.includes(key) ? [...tokens, key] : tokens;
 }
 
-module.exports = { stockItemToListing, catForMaterial, dollarPrice, withMaterialToken, MATERIAL_TO_CAT };
+module.exports = { stockItemToListing, wantsFields, catForMaterial, dollarPrice, withMaterialToken, MATERIAL_TO_CAT };

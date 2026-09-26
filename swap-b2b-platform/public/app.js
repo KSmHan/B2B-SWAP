@@ -226,7 +226,9 @@ function chainNodeHTML(it, i, last, ctx) {
     </div>`;
 }
 function chainLinkHTML(from, to) {
-  const wants = from.wantCat ? `wants<br><b>${esc((CATS[to.cat] || {}).label || to.cat)}</b>` : 'is<br><b>open to offers</b>';
+  const said = from.wantsText && from.wantsText !== 'open to offers' ? from.wantsText : '';
+  const wants = said ? `wants<br><b>${esc(said)}</b>`
+    : from.wantCat ? `wants<br><b>${esc((CATS[to.cat] || {}).label || to.cat)}</b>` : 'is<br><b>open to offers</b>';
   return `<div class="cn-link"><span class="cn-arrow">${linkIconSVG}</span><span class="cn-link-text">${esc(from.owner || 'Owner')} ${wants}</span></div>`;
 }
 
@@ -327,7 +329,7 @@ function plural(n, word) { return `${n} ${word}${n === 1 ? '' : 's'}`; }
 function listingCardHTML(it) {
   const meta = CATS[it.cat] || { label: it.cat };
   const stockLine = it.isStock
-    ? `<div class="item-wants">${esc(it.materialLabel || '')}${it.contactName ? ' · ' + esc(it.contactName) : ''}</div>`
+    ? `<div class="item-wants">${esc(it.materialLabel || '')} · wants: ${esc(it.wantsText || 'open to offers')}</div>`
     : `<div class="item-wants">wants: ${esc(it.wantsText)}</div>`;
   return `<div class="item-card">
     <div class="item-photo">

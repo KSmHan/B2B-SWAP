@@ -63,7 +63,10 @@ function header(){
       ${filesList()}
     </div>
     <div class="contact-box">
-      <div class="lbl">Contact</div>
+      <div class="lbl">Needs in return</div>
+      ${canManage() ? `<div class="wants-edit"><input type="text" id="wantsInput" maxlength="200" value="${esc(card.wants || '')}" placeholder="e.g. plywood, packaging — empty = open to offers"><button class="btn btn-ghost small" id="wantsSave">Save</button></div>`
+        : `<div><b>${esc(card.wants || 'Open to offers')}</b></div>`}
+      <div class="lbl" style="margin-top:10px;">Contact</div>
       <div><b>${esc(card.contactName)}</b></div>
       <div><a href="tel:${esc(telHref)}">${esc(card.phone)}</a></div>
       <div><a href="mailto:${esc(card.email)}?subject=${encodeURIComponent('Your stock list on B2B SWAP')}">${esc(card.email)}</a></div>
@@ -168,6 +171,21 @@ function render(){
       toast(`${data.replaced ? 'List replaced' : 'Added'}: ${plural(data.added, 'item')} sorted into ${plural(kinds, 'material type')}.`);
     };
   }
+  const wantsSave = document.getElementById('wantsSave');
+  if (wantsSave) wantsSave.onclick = async () => {
+    const wants = document.getElementById('wantsInput').value.trim();
+    wantsSave.disabled = true;
+    try {
+      const r = await fetch(`/api/cards/${encodeURIComponent(card.id)}`, {
+        method:'PATCH', headers:{ 'Content-Type':'application/json', 'X-Manage-Key': manageKey }, body: JSON.stringify({ wants }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.message || 'Could not save.');
+      card.wants = data.card.wants || '';
+      toast(wants ? `Saved — the search now looks for chains that bring you: ${wants}` : 'Saved — you are open to offers.');
+    } catch (e) { toast(e.message || 'Could not save — please try again.'); }
+    finally { wantsSave.disabled = false; }
+  };
   const del = document.getElementById('delBtn');
   if(del) del.onclick = async ()=>{
     if(!confirm(`Remove ${card.company}'s stock list from B2B SWAP? This can't be undone.`)) return;

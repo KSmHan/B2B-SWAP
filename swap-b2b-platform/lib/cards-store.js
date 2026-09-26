@@ -30,6 +30,7 @@ function rowToCard(r) {
   if (!r) return null;
   return {
     id: r.id, company: r.company, contactName: r.contact_name, email: r.email, phone: r.phone,
+    wants: r.wants || '',
     fileName: r.file_name, fileFormat: r.file_format, fileSize: r.file_size, filePath: r.file_path,
     itemCount: r.item_count, categories: r.categories || {}, status: r.status,
     files: Array.isArray(r.files) && r.files.length ? r.files
@@ -45,9 +46,12 @@ function rowToItem(r) {
   };
   if (r.stock_cards) {
     const c = r.stock_cards;
-    item.card = { id: c.id, company: c.company, contactName: c.contact_name, phone: c.phone, email: c.email };
+    item.card = { id: c.id, company: c.company, contactName: c.contact_name, phone: c.phone, email: c.email, wants: c.wants || '' };
   }
   return item;
+}
+function isMissingWantsColumn(error) {
+  return /wants/.test(error.message || '') && /column|schema cache/i.test(error.message || '');
 }
 function likePattern(q) {
   return '%' + String(q).toLowerCase().replace(/[\\%_]/g, (m) => '\\' + m) + '%';
@@ -60,12 +64,20 @@ function createSupabaseStore(supabase) {
     kind: 'supabase',
 
     async createCard(card, items) {
-      const { error } = await supabase.from('stock_cards').insert({
+      const row = {
         id: card.id, company: card.company, contact_name: card.contactName, email: card.email, phone: card.phone,
         file_name: card.fileName, file_format: card.fileFormat, file_size: card.fileSize, file_path: card.filePath || null,
         item_count: items.length, categories: card.categories, status: 'live', manage_token_hash: card.manageTokenHash,
         files: card.files || [],
-      });
+      };
+      if (card.wants) row.wants = card.wants;
+      let { error } = await supabase.from('stock_cards').insert(row);
+      if (error && row.wants && isMissingWantsColumn(error)) {
+        // supabase/003_stock_card_wants.sql not applied yet: keep the upload, drop the optional field.
+        console.warn('[cards-store] stock_cards.wants missing — run supabase/003_stock_card_wants.sql');
+        delete row.wants;
+        ({ error } = await supabase.from('stock_cards').insert(row));
+      }
       if (error) fail('createCard', error);
       try {
         await this.insertItems(card.id, items, 0);
@@ -141,7 +153,7 @@ function createSupabaseStore(supabase) {
 
     async listItems({ category, q, limit = 60, offset = 0, email } = {}) {
       let query = supabase.from('stock_items')
-        .select('id,card_id,position,category,title,qty,unit,price,specs,stock_cards!inner(id,company,contact_name,phone,email,status)', { count: 'exact' })
+        .select('id,card_id,position,category,title,qty,unit,price,specs,stock_cards!inner(*)', { count: 'exact' })
         .eq('stock_cards.status', 'live');
       if (email) query = query.eq('stock_cards.email', email);
       if (category) query = query.eq('category', category);
@@ -156,7 +168,7 @@ function createSupabaseStore(supabase) {
       const out = [];
       for (let from = 0; from < max; from += 1000) {
         const { data, error } = await supabase.from('stock_items')
-          .select('id,card_id,position,category,title,qty,unit,price,specs,stock_cards!inner(id,company,contact_name,phone,email,status)')
+          .select('id,card_id,position,category,title,qty,unit,price,specs,stock_cards!inner(*)')
           .eq('stock_cards.status', 'live').order('id', { ascending: false }).range(from, from + 999);
         if (error) fail('allLiveItems', error);
         out.push(...(data || []).map(rowToItem));
@@ -193,6 +205,17 @@ function createSupabaseStore(supabase) {
       if (!data) return false;
       await this.refreshCardCategories(cardId);
       return true;
+    },
+
+    async updateWants(cardId, wants) {
+      const { error } = await supabase.from('stock_cards').update({ wants }).eq('id', cardId);
+      if (error && isMissingWantsColumn(error)) {
+        const e = new Error('stock_cards.wants column missing — run supabase/003_stock_card_wants.sql');
+        e.code = 'wants_column_missing';
+        throw e;
+      }
+      if (error) fail('updateWants', error);
+      return this.getCard(cardId);
     },
 
     async refreshCardCategories(cardId) {
@@ -238,7 +261,7 @@ function createMemoryStore() {
   const live = (it) => { const c = cards.get(it.cardId); return c && c.status === 'live'; };
   const withCard = (it) => {
     const c = cards.get(it.cardId);
-    return Object.assign({}, it, { card: { id: c.id, company: c.company, contactName: c.contactName, phone: c.phone, email: c.email } });
+    return Object.assign({}, it, { card: { id: c.id, company: c.company, contactName: c.contactName, phone: c.phone, email: c.email, wants: c.wants || '' } });
   };
 
   return {
@@ -249,7 +272,8 @@ function createMemoryStore() {
       list.forEach((it, i) => items.push(Object.assign({ id: nextItemId++, cardId: card.id, position: i }, it)));
       return this.getCard(card.id);
     },
-    async getCard(id) { const c = cards.get(id); return c ? Object.assign({}, c, { files: [...c.files] }) : null; },
+    async getCard(id) { const c = cards.get(id); return c ? Object.assign({ wants: '' }, c, { files: [...c.files] }) : null; },
+    async updateWants(cardId, wants) { const c = cards.get(cardId); c.wants = wants; return this.getCard(cardId); },
     async addFile(cardId, file, list, { replace = false } = {}) {
       const c = cards.get(cardId);
       if (!c) return null;

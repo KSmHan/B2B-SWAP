@@ -3,7 +3,7 @@
    file, with no account needed — just company name + contact person,
    email and phone. Every row is catalogued by material automatically.
 
-   POST   /api/cards                         multipart: company, contactName, email, phone, file
+   POST   /api/cards                         multipart: company, contactName, email, phone, file, wants?
    GET    /api/cards                         (logged in) the account's own cards
    GET    /api/cards/materials               (logged in) material types with the account's item counts
    GET    /api/cards/items?cat=&q=&offset=   (logged in) the account's own items
@@ -13,6 +13,7 @@
    GET    /api/cards/:id                     one card + its items
    GET    /api/cards/:id/file?n=             download uploaded file #n (default: latest)
    POST   /api/cards/:id/files               (X-Manage-Key) multipart: file, mode=append|replace
+   PATCH  /api/cards/:id                     (X-Manage-Key or owner login) { wants } — what they need in return
    DELETE /api/cards/:id                     (X-Manage-Key or owner login) remove the card
    PATCH  /api/cards/:id/items/:itemId       (X-Manage-Key or owner login) { category } — fix a material
    ===================================================================== */
@@ -152,6 +153,7 @@ function createCardsRouter({ store = getDefaultStore(), mailer = require('../mai
     // Logged in: the card always belongs to the account, so it shows under "My materials".
     const email = ownerEmail(req) || field(b.email, 160).toLowerCase();
     const phone = field(b.phone, 30);
+    const wants = field(b.wants, 200); // optional: "What do you need in return?"
     const errors = {};
     if (company.length < 2) errors.company = 'Enter your company name.';
     if (contactName.length < 2) errors.contactName = 'Enter a contact name.';
@@ -169,7 +171,7 @@ function createCardsRouter({ store = getDefaultStore(), mailer = require('../mai
     const file = await storeOriginal(id, upload, req.file.size, req.file.buffer);
 
     const card = await store.createCard({
-      id, company, contactName, email, phone,
+      id, company, contactName, email, phone, wants,
       fileName, fileFormat: parsed.format, fileSize: req.file.size, filePath: file.path,
       files: [file], categories: countCategories(parsed.items), manageTokenHash: hashToken(manageKey),
     }, parsed.items);
@@ -262,6 +264,20 @@ function createCardsRouter({ store = getDefaultStore(), mailer = require('../mai
     const file = await storeOriginal(req.card.id, upload, req.file.size, req.file.buffer);
     const card = await store.addFile(req.card.id, file, items, { replace });
     res.status(201).json({ card: publicCard(card), added: items.length, replaced: replace, categories: countCategories(items) });
+  });
+
+  // PATCH /api/cards/:id { wants } — the owner changes what they need in return
+  router.patch('/:id', express.json(), async (req, res) => {
+    const card = await requireManageKey(req, res);
+    if (!card) return;
+    const wants = field((req.body || {}).wants, 200);
+    try {
+      const updated = await store.updateWants(card.id, wants);
+      res.json({ card: publicCard(updated) });
+    } catch (e) {
+      if (e.code === 'wants_column_missing') return res.status(503).json({ error: 'not_ready', message: 'Saving this needs a database update (supabase/003_stock_card_wants.sql).' });
+      throw e;
+    }
   });
 
   // DELETE /api/cards/:id
