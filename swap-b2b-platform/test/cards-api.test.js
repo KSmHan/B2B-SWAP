@@ -228,3 +228,19 @@ test('a logged-in upload is tied to the account email, whatever the form says', 
   assert.equal(res.status, 201);
   assert.equal(body.card.email, 'acct@owner.example');
 });
+
+test('"What do you need in return?" is saved on upload and editable by the owner only', async () => {
+  const { status, body } = await post(Object.assign({}, CONTACT, { email: 'wants@owner.example', wants: '  plywood, packaging  ' }), fixture('stock-en.csv'));
+  assert.equal(status, 201);
+  assert.equal(body.card.wants, 'plywood, packaging');
+  const id = body.card.id;
+  const patch = (headers, wants) => fetch(`${base}/${id}`, { method: 'PATCH', headers: Object.assign({ 'Content-Type': 'application/json' }, headers), body: JSON.stringify({ wants }) });
+
+  assert.equal((await patch({ 'X-Test-Email': 'other@x.example' }, 'steel')).status, 403);
+  let r = await patch({ 'X-Manage-Key': body.manageKey }, 'steel or copper');
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).card.wants, 'steel or copper');
+  r = await patch({ 'X-Test-Email': 'wants@owner.example' }, '');
+  assert.equal((await r.json()).card.wants, '');
+  assert.equal((await (await fetch(`${base}/${id}`)).json()).card.wants, '');
+});

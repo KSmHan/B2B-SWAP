@@ -203,7 +203,8 @@ function findChain(allItems, start, wantTokens, maxHops) {
   const wantCatGeneric = detectCategory(wantTokens);
   const hasWant = wantTokens.length > 0;
   const matchScore = (it) => score(wantTokens, it.tags) + (wantCatGeneric && it.cat === wantCatGeneric ? 1 : 0) + titleScore(wantTokens, it) * 0.5;
-  const satisfied = (it) => (hasWant ? matchScore(it) > 0 : (!start.wantCat || it.cat === start.wantCat));
+  const startCats = start.wantCats && start.wantCats.length ? start.wantCats : (start.wantCat ? [start.wantCat] : []);
+  const satisfied = (it) => (hasWant ? matchScore(it) > 0 : (!startCats.length || startCats.includes(it.cat)));
 
   const byCat = {};
   allItems.forEach(it => { if (it.status === 'live') (byCat[it.cat] = byCat[it.cat] || []).push(it); });
@@ -219,7 +220,8 @@ function findChain(allItems, start, wantTokens, maxHops) {
       // An owner with no stated want (uploaded stock lists) is open to offers:
       // any live item can follow it. Expanding that once covers every such node.
       let pool;
-      if (cur.wantCat) pool = byCat[cur.wantCat] || [];
+      const cats = cur.wantCats && cur.wantCats.length ? cur.wantCats : (cur.wantCat ? [cur.wantCat] : []);
+      if (cats.length) pool = cats.flatMap(c => byCat[c] || []);
       else if (!everythingQueued) { pool = live; everythingQueued = true; }
       else pool = [];
       for (const it of pool) {
