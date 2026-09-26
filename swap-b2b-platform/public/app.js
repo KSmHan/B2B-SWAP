@@ -24,6 +24,7 @@ async function api(path, opts = {}) {
 
 const CATS = {
   metal:      { label: 'Metal & Raw Materials' },
+  wood:       { label: 'Wood & Panels' },
   plastic:    { label: 'Plastics & Polymers' },
   components: { label: 'Components & Parts' },
   packaging:  { label: 'Packaging & Containers' },
@@ -45,6 +46,15 @@ function catPhoto(cat, uid) {
       <rect x="30" y="172" width="340" height="26" rx="3" fill="url(#${g}m)" opacity=".76"/>
       <rect x="30" y="206" width="340" height="26" rx="3" fill="url(#${g}m)" opacity=".68"/>
       <circle cx="55" cy="83" r="4" fill="#5A6B90"/><circle cx="345" cy="83" r="4" fill="#5A6B90"/>
+    </svg>`;
+  }
+  if (cat === 'wood') {
+    return `<svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="${g}bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FBF3E6"/><stop offset="1" stop-color="#F3E4CC"/></linearGradient>
+      <linearGradient id="${g}w" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#D9B27C"/><stop offset=".5" stop-color="#C99A5E"/><stop offset="1" stop-color="#B8864A"/></linearGradient></defs>
+      <rect width="400" height="300" fill="url(#${g}bg)"/>
+      <g stroke="#9C6F37" stroke-width="1.2"><rect x="40" y="190" width="320" height="34" rx="2" fill="url(#${g}w)"/><rect x="55" y="152" width="300" height="34" rx="2" fill="url(#${g}w)" opacity=".92"/><rect x="70" y="114" width="280" height="34" rx="2" fill="url(#${g}w)" opacity=".85"/><rect x="85" y="76" width="260" height="34" rx="2" fill="url(#${g}w)" opacity=".78"/></g>
+      <g stroke="#A97A42" stroke-width="1" opacity=".45" fill="none"><path d="M60 207 q60 -8 120 0 t120 0"/><path d="M75 169 q60 -8 120 0 t110 0"/><path d="M90 131 q60 -8 110 0 t100 0"/></g>
     </svg>`;
   }
   if (cat === 'plastic') {
@@ -84,7 +94,7 @@ async function renderNav(active) {
   try { const me = await api('/auth/me'); account = me.account; } catch (e) { /* not logged in */ }
   const items = [
     ['how-it-works.html', 'How it works', 'how'],
-    ['materials.html', 'Materials', 'materials'],
+    ['materials.html', 'My materials', 'materials'],
     ['catalog.html', 'Catalog', 'catalog'],
     ['how-it-works.html#faq', 'FAQ', 'faq'],
   ];
@@ -113,7 +123,7 @@ function renderFooter() {
           <p>AI platform for industrial surplus exchange.</p>
         </div>
         <div class="foot-col"><h4>Platform</h4>
-          <a href="how-it-works.html">How it works</a><a href="materials.html">Materials</a><a href="catalog.html">Catalog</a><a href="upload.html">Upload stock list</a>
+          <a href="how-it-works.html">How it works</a><a href="materials.html">My materials</a><a href="catalog.html">Catalog</a><a href="upload.html">Upload stock list</a>
         </div>
         <div class="foot-col"><h4>Company</h4>
           <a href="how-it-works.html#faq">FAQ</a><a href="#">Trust &amp; safety</a><a href="#">Contact</a>
@@ -141,6 +151,12 @@ function toast(messages) {
 /* ---------------- product card (used on catalog + chain results) ----------------
    Layout requested: technical specs / quantity / location shown once near the
    top, and the pickup location shown once at the bottom of the card. */
+/** Price as shown to people: "$2,500" for published listings, the uploaded text for stock rows. */
+function valueText(it) {
+  if (it.isStock) return it.priceText || 'on request';
+  return '$' + Number(it.price || 0).toLocaleString();
+}
+
 function specsBlockHTML(it) {
   return `<div class="cn-specs item-specs">
     <div><span>Specs</span><b>${esc(it.specs || it.condition || '—')}</b></div>
@@ -162,7 +178,8 @@ function chainNodeHTML(it, i, isFirst) {
         <div class="cn-step">${isFirst ? 'STEP 0 · YOU' : 'STEP ' + i}</div>
         <div class="cn-title">${esc(it.title)}</div>
         ${specsBlockHTML(it)}
-        <div class="cn-price">est. value <b>$${Number(it.price).toLocaleString()}</b>${it.cashOk ? ` · open to +${esc(it.cashRange)}` : ''}</div>
+        <div class="cn-price">${it.isStock ? 'price' : 'est. value'} <b>${esc(valueText(it))}</b>${it.cashOk ? ` · open to +${esc(it.cashRange)}` : ''}</div>
+        ${it.isStock && it.cardId ? `<a class="btn-link cn-card-link" href="card.html?id=${encodeURIComponent(it.cardId)}">Full stock list →</a>` : ''}
         ${contact}
         ${pickupLineHTML(it)}
       </div>
@@ -224,7 +241,7 @@ function esc(v) {
 let _materials = null;
 async function loadMaterials() {
   if (!_materials) {
-    const data = await api('/cards/materials');
+    const data = await api('/cards/material-types');
     _materials = data.materials;
   }
   return _materials;
@@ -240,3 +257,77 @@ function qtyText(it) {
   return it.qty ? `${it.qty}${it.unit ? ' ' + it.unit : ''}` : '—';
 }
 function plural(n, word) { return `${n} ${word}${n === 1 ? '' : 's'}`; }
+
+/* ---------------- catalog browser (catalog page + home page) ----------------
+   Search + category + price + cash filters over /api/listings, which returns
+   hand-published listings and every row of every uploaded stock list. */
+function listingCardHTML(it) {
+  const meta = CATS[it.cat] || { label: it.cat };
+  const stockLine = it.isStock
+    ? `<div class="item-wants">${esc(it.materialLabel || '')}${it.contactName ? ' · ' + esc(it.contactName) : ''}</div>`
+    : `<div class="item-wants">wants: ${esc(it.wantsText)}</div>`;
+  return `<div class="item-card">
+    <div class="item-photo">
+      ${catPhoto(it.cat, it.id)}
+      <span class="cat-tag">${esc(meta.label)}</span>
+      ${it.cashOk ? `<span class="cash-tag">+ top-up ${esc(it.cashRange)}</span>` : ''}
+    </div>
+    <div class="item-body">
+      <div class="item-title">${esc(it.title)}</div>
+      ${specsBlockHTML(it)}
+      ${it.isStock ? '' : `<div class="item-desc">${esc(it.desc)}</div>`}
+      ${stockLine}
+      <div class="item-price-row"><span></span><b>${esc(valueText(it))}</b></div>
+      <div class="item-foot"><span>${esc(it.owner)}</span><span>${esc(it.phone || '')}</span></div>
+      ${it.isStock && it.cardId
+        ? `<div class="cn-pickup item-pickup"><a class="btn-link" href="card.html?id=${encodeURIComponent(it.cardId)}">Full stock list →</a></div>`
+        : pickupLineHTML(it)}
+    </div>
+  </div>`;
+}
+
+function mountCatalogBrowser(root, { limit } = {}) {
+  root.innerHTML = `
+    <div class="filters">
+      <input type="text" data-f="search" placeholder="Search listings… e.g. aluminum sheet, plywood, АМг3">
+      <select data-f="cat">
+        <option value="">All categories</option>
+        ${Object.keys(CATS).map(k => `<option value="${k}">${esc(CATS[k].label)}</option>`).join('')}
+      </select>
+      <select data-f="price">
+        <option value="">Any price</option>
+        <option value="0-1500">Under $1,500</option>
+        <option value="1500-3000">$1,500 – $3,000</option>
+        <option value="3000-6000">$3,000 – $6,000</option>
+        <option value="6000-999999">$6,000+</option>
+      </select>
+      <label class="chk"><input type="checkbox" data-f="cash"> Open to cash top-up</label>
+      <span class="count mono" data-f="count"></span>
+    </div>
+    <div class="item-grid" data-f="grid"></div>
+    <div class="more-row" data-f="more" style="display:none;"><a class="btn btn-ghost" href="catalog.html">See the full catalog →</a></div>`;
+  const $ = (f) => root.querySelector(`[data-f="${f}"]`);
+  let reqId = 0, timer = null;
+  async function render() {
+    const my = ++reqId;
+    const params = new URLSearchParams({
+      search: $('search').value.trim(), cat: $('cat').value, price: $('price').value, cash: $('cash').checked ? '1' : '',
+    });
+    const grid = $('grid');
+    grid.innerHTML = '<p style="color:var(--text-faint);font-size:13px;">Loading listings…</p>';
+    try {
+      const data = await api('/listings?' + params.toString());
+      if (my !== reqId) return;
+      $('count').textContent = plural(data.count, 'listing');
+      const shown = limit ? data.listings.slice(0, limit) : data.listings;
+      grid.innerHTML = shown.map(listingCardHTML).join('') ||
+        '<p style="color:var(--text-faint);font-size:13px;">No listings match those filters.</p>';
+      $('more').style.display = limit && data.count > limit ? 'block' : 'none';
+    } catch (err) {
+      if (my === reqId) grid.innerHTML = '<p style="color:var(--text-faint);font-size:13px;">Could not load listings — please try again.</p>';
+    }
+  }
+  $('search').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(render, 250); });
+  ['cat', 'price', 'cash'].forEach(f => $(f).addEventListener('change', render));
+  render();
+}

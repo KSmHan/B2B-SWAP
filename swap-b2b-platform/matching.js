@@ -5,14 +5,16 @@
 
 const CATS = {
   metal:      { label: 'Metal & Raw Materials' },
+  wood:       { label: 'Wood & Panels' },
   plastic:    { label: 'Plastics & Polymers' },
   components: { label: 'Components & Parts' },
   packaging:  { label: 'Packaging & Containers' },
 };
-const CAT_ORDER = ['metal', 'plastic', 'components', 'packaging'];
+const CAT_ORDER = ['metal', 'wood', 'plastic', 'components', 'packaging'];
 
 const CAT_KEYWORDS = {
   metal: ['steel','metal','metals','aluminum','aluminium','copper','bronze','titanium','brass','iron','rebar','wire rod','sheet','galvanized','coil','channel bar','round bar','raw material','raw materials'],
+  wood: ['wood','wooden','timber','lumber','plywood','mdf','hdf','osb','chipboard','particleboard','hardboard','veneer','board','boards','panel','panels','beam','beams','plank','planks'],
   plastic: ['plastic','plastics','pellet','pellets','resin','pvc','pp','polypropylene','hdpe','ldpe','abs','pet','polymer','polymers','rubber','silicone','polyurethane','epoxy','nylon','foam','fiberglass','polycarbonate','compound'],
   components: ['component','components','part','parts','bearing','bearings','motor','motors','gear','reducer','reducers','cable','valve','valves','cylinder','cylinders','sensor','sensors','contactor','contactors','chain','chains','o-ring','o-rings','terminal','fastener','fasteners','bolt','bolts','drive','drives','vfd'],
   packaging: ['pallet','pallets','box','boxes','bag','bags','film','wrap','crate','crates','drum','drums','tote','totes','ibc','carton','corrugated','strap','strapping','collar','collars','packaging','container','containers'],
@@ -30,7 +32,7 @@ function detectCategory(tokens) {
 function nextCatFor(cat, i) {
   const idx = CAT_ORDER.indexOf(cat);
   const jump = (i % 5 === 0) ? 2 : 1;
-  return CAT_ORDER[(idx + jump) % 4];
+  return CAT_ORDER[(idx + jump) % CAT_ORDER.length];
 }
 function tokenize(s) {
   return (s || '').toLowerCase().replace(/[.,"']/g, ' ').split(/\s+/).filter(w => w.length > 2);
@@ -43,6 +45,7 @@ const CASH_RANGES = ["$0–200","$200–500","$500–1,000","$1,000–2,000"];
 const DOCKS = ["Dock A","Dock B","Yard 2","Warehouse 4, Bay 1","Loading Dock 3","Rear Yard Gate 2","Warehouse 1, Bay C","Shipping Dock 5"];
 const SPEC_NOTES = {
   metal: 'Mill-certified, standard commercial tolerances. Cert of conformance available on request.',
+  wood: 'Stored indoors on pallets. Grade and moisture details available on request.',
   plastic: 'Certificate of analysis available on request. Stored indoors, original packaging.',
   components: 'Original manufacturer packaging, unopened where noted. Datasheets available on request.',
   packaging: 'Stackable and palletized for freight. ISPM-15 compliant where wood is involved.',
@@ -161,39 +164,57 @@ function score(tokens, itemTokens) {
   tokens.forEach(t => { if (itemTokens.some(it => it.includes(t) || t.includes(it))) s++; });
   return s;
 }
-function findStartCandidates(allItems, haveTokens) {
+/** Listings matching what the user has. `material` (lib/materials.js key named in
+ *  the request, e.g. "steel") ranks rows of that material above look-alikes
+ *  ("steel sheet" → steel plate before polycarbonate sheet). */
+function findStartCandidates(allItems, haveTokens, material) {
   return allItems
     .filter(it => it.status === 'live')
     .map(it => ({ it, s: score(haveTokens, it.tags) }))
     .filter(x => x.s > 0)
+    .map(x => (material && x.it.material === material ? { it: x.it, s: x.s + 2 } : x))
     .sort((a, b) => b.s - a.s)
     .map(x => x.it);
 }
+/**
+ * Shortest trade chain from `start` to an item that satisfies `wantTokens`,
+ * up to `maxHops` hops. Breadth-first over "the owner of A wants B's
+ * category" edges (B.cat === A.wantCat), so a chain is found whenever one
+ * exists within the hop limit — the old greedy walk could dead-end early.
+ * Among equally short chains the final item that best matches the request
+ * wins. With no `need` at all, any item the start's owner wants satisfies it.
+ */
 function findChain(allItems, start, wantTokens, maxHops) {
   const wantCatGeneric = detectCategory(wantTokens);
-  const satisfied = (it) => score(wantTokens, it.tags) > 0 || (wantCatGeneric && it.cat === wantCatGeneric);
+  const hasWant = wantTokens.length > 0;
+  const matchScore = (it) => score(wantTokens, it.tags) + (wantCatGeneric && it.cat === wantCatGeneric ? 1 : 0);
+  const satisfied = (it) => (hasWant ? matchScore(it) > 0 : it.cat === start.wantCat);
 
-  let path = [start];
-  let current = start;
-  const visited = new Set([start.id]);
-  const live = allItems.filter(it => it.status === 'live');
-  for (let hop = 0; hop < maxHops; hop++) {
-    if (hop > 0 && satisfied(current)) return path;
-    const nextCat = current.wantCat;
-    const pool = live.filter(it => it.cat === nextCat && !visited.has(it.id));
-    if (pool.length === 0) return path.length > 1 ? path : null;
-    pool.sort((a, b) => {
-      const sb = score(wantTokens, b.tags) + (wantCatGeneric && b.cat === wantCatGeneric ? 5 : 0);
-      const sa = score(wantTokens, a.tags) + (wantCatGeneric && a.cat === wantCatGeneric ? 5 : 0);
-      return sb - sa;
-    });
-    const next = pool[0];
-    path.push(next);
-    visited.add(next.id);
-    current = next;
-    if (satisfied(current)) return path;
+  const byCat = {};
+  allItems.forEach(it => { if (it.status === 'live') (byCat[it.cat] = byCat[it.cat] || []).push(it); });
+
+  const prev = new Map([[start.id, null]]);
+  let frontier = [start];
+  for (let hop = 1; hop <= maxHops && frontier.length; hop++) {
+    const next = [];
+    const hits = [];
+    for (const cur of frontier) {
+      for (const it of byCat[cur.wantCat] || []) {
+        if (prev.has(it.id)) continue;
+        prev.set(it.id, cur);
+        next.push(it);
+        if (satisfied(it)) hits.push(it);
+      }
+    }
+    if (hits.length) {
+      hits.sort((a, b) => matchScore(b) - matchScore(a));
+      const path = [];
+      for (let n = hits[0]; n; n = prev.get(n.id)) path.unshift(n);
+      return path;
+    }
+    frontier = next;
   }
-  return path.length > 1 ? path : null;
+  return null;
 }
 function suggestSimilar(allItems, tokens) {
   return allItems

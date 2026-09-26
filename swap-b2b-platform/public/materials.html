@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Materials catalog — B2B SWAP</title>
+<title>My materials — B2B SWAP</title>
 <meta name="description" content="Surplus aluminum, copper, steel, MDF, plywood and more from companies' uploaded stock lists — sorted by material automatically.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -17,15 +17,26 @@
   <section style="padding-bottom:0;">
     <div class="section-head" style="text-align:left;max-width:1100px;display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;">
       <div style="max-width:640px;">
-        <div class="eyebrow">MATERIALS CATALOG</div>
-        <h2>Surplus stock, sorted by material</h2>
-        <p>Every item from every uploaded stock list, catalogued automatically. Pick a material or search — contacts are on every row.</p>
+        <div class="eyebrow">MY MATERIALS</div>
+        <h2>Your stock, sorted by material</h2>
+        <p id="introText">Every item from the stock lists you uploaded, catalogued automatically. Only you can see this page — buyers find your items in the catalog and in "I have / I need" searches.</p>
       </div>
       <a href="upload.html" class="btn btn-primary">Upload your stock list</a>
     </div>
   </section>
 
-  <section style="padding-top:8px;">
+  <section style="padding-top:8px;" id="loginGate" hidden>
+    <div class="up-shell"><div class="up-card list-empty">
+      <b style="color:var(--text);font-size:15px;">Log in to see your materials</b><br>
+      This page shows only the stock lists uploaded with your account email.
+      <div class="btn-row" style="justify-content:center;">
+        <a class="btn btn-primary" href="account.html">Log in</a>
+        <a class="btn btn-ghost" href="upload.html">Upload a stock list</a>
+      </div>
+    </div></div>
+  </section>
+
+  <section style="padding-top:8px;" id="mine" hidden>
     <div class="cat-toolbar">
       <div class="cat-search">
         <input type="search" id="q" placeholder="Search: sheet 2mm, AMg3, birch plywood…" autocomplete="off">
@@ -40,8 +51,8 @@
 
   <section class="border-t" id="coSection" style="display:none;">
     <div class="section-head" style="text-align:left;max-width:1100px;margin-bottom:20px;">
-      <div class="eyebrow">RECENTLY ADDED</div>
-      <h2 style="font-size:22px;">Companies with fresh stock lists</h2>
+      <div class="eyebrow">YOUR STOCK LISTS</div>
+      <h2 style="font-size:22px;">Open a list to upload more files or fix materials</h2>
     </div>
     <div class="co-strip" id="coStrip"></div>
   </section>
@@ -68,7 +79,7 @@ function syncUrl(){
 
 async function renderChips(){
   let mats = [];
-  try{ mats = await loadMaterials(); }catch(_){}
+  try{ await loadMaterials(); mats = (await api('/cards/materials')).materials; }catch(_){}
   const total = mats.reduce((s,m)=>s+m.count, 0);
   const shown = mats.filter(m=>m.count > 0 || m.key === state.cat);
   document.getElementById('chips').innerHTML =
@@ -94,7 +105,7 @@ function rowHTML(it){
     </div>
   </div>`;
 }
-const HEAD = `<div class="stock-row head"><div>Material</div><div>Item</div><div>Quantity</div><div>Price</div><div>Company</div></div>`;
+const HEAD = `<div class="stock-row head"><div>Material</div><div>Item</div><div>Quantity</div><div>Price</div><div>Stock list</div></div>`;
 
 let reqId = 0;
 async function loadItems(append){
@@ -112,7 +123,7 @@ async function loadItems(append){
   document.getElementById('count').textContent = plural(data.total, 'item');
   if(!append){
     list.innerHTML = data.items.length ? HEAD + data.items.map(rowHTML).join('') :
-      `<div class="list-empty">${state.q || state.cat ? 'Nothing matches yet.' : 'No stock lists yet — be the first.'}<br><a class="btn btn-primary small" href="upload.html">Upload your stock list</a></div>`;
+      `<div class="list-empty">${state.q || state.cat ? 'Nothing matches yet.' : 'You haven\'t uploaded a stock list with this account yet.'}<br><a class="btn btn-primary small" href="upload.html">Upload your stock list</a></div>`;
   } else {
     list.insertAdjacentHTML('beforeend', data.items.map(rowHTML).join(''));
   }
@@ -130,7 +141,7 @@ document.getElementById('q').addEventListener('input', e=>{
 async function loadCompanies(){
   try{
     await loadMaterials();
-    const { cards } = await api('/cards?limit=8');
+    const { cards } = await api('/cards?limit=50');
     if(!cards.length) return;
     document.getElementById('coStrip').innerHTML = cards.map(c=>{
       const top = Object.entries(c.categories || {}).sort((a,b)=>b[1]-a[1]).slice(0,4);
@@ -144,8 +155,14 @@ async function loadCompanies(){
   }catch(_){}
 }
 
-renderChips().then(()=>loadItems(false));
-loadCompanies();
+(async ()=>{
+  let me = null;
+  try{ me = (await api('/auth/me')).account; }catch(_){}
+  if(!me || !me.verified){ document.getElementById('loginGate').hidden = false; return; }
+  document.getElementById('mine').hidden = false;
+  renderChips().then(()=>loadItems(false));
+  loadCompanies();
+})();
 </script>
 </body>
 </html>

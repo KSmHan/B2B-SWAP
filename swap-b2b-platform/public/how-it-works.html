@@ -115,7 +115,7 @@ renderFooter();
     const data = await api('/agent/search', { method:'POST', body:{ have:'surplus rebar', need:'components' } });
     if(data.status !== 'ok'){ answerEl.textContent = data.message; return; }
     const path = data.chain;
-    answerEl.textContent = `you: "I have surplus rebar, I need components" — found a chain with ${data.hops} hop${data.hops===1?'':'s'}: you give up "${path[0].title}" (~$${path[0].price.toLocaleString()}) → you receive "${path[path.length-1].title}" (~$${path[path.length-1].price.toLocaleString()}).`;
+    answerEl.textContent = `you: "I have surplus rebar, I need components" — found a chain with ${data.hops} hop${data.hops===1?'':'s'}: you give up "${path[0].title}" (${valueText(path[0])}) → you receive "${path[path.length-1].title}" (${valueText(path[path.length-1])}).`;
     renderChainInto(document.getElementById('exampleChain'), path);
   } catch(e){
     answerEl.textContent = 'Could not load the live example right now — the AI agent works the same way on the home page.';
