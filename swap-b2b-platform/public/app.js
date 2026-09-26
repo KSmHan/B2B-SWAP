@@ -168,34 +168,91 @@ function pickupLineHTML(it) {
   return `<div class="cn-pickup item-pickup"><span class="pin">📍</span>Ready for pickup: <b>${esc(it.pickupLocation || it.region || '—')}</b></div>`;
 }
 
-/* ---------------- chain rendering (home + how-it-works worked example) ---------------- */
-const linkIconSVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-function chainNodeHTML(it, i, isFirst) {
-  const contact = !isFirst ? `<div class="cn-owner" style="margin-top:6px;">${esc(it.owner)}${it.phone ? ' · ' + esc(it.phone) : ''}</div>` : '';
-  return `<div class="cn">
-      <div class="cn-photo">${catPhoto(it.cat)}</div>
+/* ---------------- chain rendering (home + how-it-works worked example) ----------------
+   Visual result of an "I have / I need" search:
+     • a summary strip — what you give → what you get, hops, companies;
+     • one card per step, the first ("YOU GIVE") and last ("YOU GET") marked,
+       with the words that matched highlighted and a badge saying WHY the last
+       item answers the request (name / material / category);
+     • arrows that say who wants what ("Company wants Wood & Panels"). */
+const linkIconSVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function queryWords(text) {
+  return String(text || '').toLowerCase().split(/[^a-zа-яё0-9]+/i).filter(w => w.length >= 3);
+}
+/** Escapes `text` and wraps every occurrence of the query words in <mark>. */
+function highlightHTML(text, words) {
+  const raw = String(text || '');
+  const ws = [...new Set(words)].sort((a, b) => b.length - a.length).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!ws.length) return esc(raw);
+  // Split the RAW text, then escape each piece — marks never land inside an entity.
+  return raw.split(new RegExp(`(${ws.join('|')})`, 'gi'))
+    .map((part, i) => (i % 2 ? `<mark>${esc(part)}</mark>` : esc(part))).join('');
+}
+function matchReason(it, words, material, cat) {
+  const hay = `${it.title} ${it.specs || ''} ${it.desc || ''}`.toLowerCase();
+  const hit = words.find(w => hay.includes(w));
+  if (hit) return `name matches “${hit}”`;
+  if (material && it.material === material) return `material: ${it.materialLabel || materialInfo(material).label}`;
+  if (cat && it.cat === cat) return `category: ${(CATS[cat] || {}).label || cat}`;
+  return '';
+}
+
+function chainNodeHTML(it, i, last, ctx) {
+  const role = i === 0 ? 'give' : (i === last ? 'get' : 'mid');
+  const label = role === 'give' ? 'YOU GIVE' : role === 'get' ? 'YOU GET' : `STEP ${i}`;
+  const words = role === 'give' ? ctx.haveWords : role === 'get' ? ctx.needWords : (ctx.midWords || []);
+  const reason = role === 'get' && last > 0 ? matchReason(it, ctx.needWords, ctx.needMaterial, ctx.needCat)
+    : role === 'give' ? matchReason(it, ctx.haveWords, ctx.haveMaterial, null) : '';
+  const tag = it.materialLabel || (CATS[it.cat] || {}).label || '';
+  const tel = String(it.phone || '').replace(/[^\d+]/g, '');
+  return `<div class="cn cn-${role}">
+      <div class="cn-photo">${catPhoto(it.cat)}<span class="cn-role">${label}</span></div>
       <div class="cn-body">
-        <div class="cn-step">${isFirst ? 'STEP 0 · YOU' : 'STEP ' + i}</div>
-        <div class="cn-title">${esc(it.title)}</div>
-        ${specsBlockHTML(it)}
-        <div class="cn-price">${it.isStock ? 'price' : 'est. value'} <b>${esc(valueText(it))}</b>${it.cashOk ? ` · open to +${esc(it.cashRange)}` : ''}</div>
-        ${it.isStock && it.cardId ? `<a class="btn-link cn-card-link" href="card.html?id=${encodeURIComponent(it.cardId)}">Full stock list →</a>` : ''}
-        ${contact}
-        ${pickupLineHTML(it)}
+        ${tag ? `<span class="mat-tag">${esc(tag)}</span>` : ''}
+        <div class="cn-title">${highlightHTML(it.title, words)}</div>
+        ${reason ? `<div class="cn-why ${role === 'get' ? 'ok' : ''}">${role === 'get' ? '✓ ' : ''}${esc(reason)}</div>` : ''}
+        <div class="cn-facts">
+          <div><span>Quantity</span><b>${esc(it.qty || '—')}</b></div>
+          <div><span>${it.isStock ? 'Price' : 'Est. value'}</span><b>${esc(valueText(it))}</b></div>
+          ${it.region && it.region !== '—' ? `<div><span>Location</span><b>${esc(it.region)}</b></div>` : ''}
+        </div>
+        <div class="cn-contact">
+          <b>${esc(it.owner || '—')}</b>${it.contactName ? ` · ${esc(it.contactName)}` : ''}
+          ${it.phone ? `<br><a href="tel:${esc(tel)}">${esc(it.phone)}</a>` : ''}
+          ${it.isStock && it.cardId ? `<br><a class="btn-link" href="card.html?id=${encodeURIComponent(it.cardId)}">Full stock list →</a>` : ''}
+        </div>
       </div>
     </div>`;
 }
-function renderChainInto(containerEl, path) {
+function chainLinkHTML(from, to) {
+  const wants = (CATS[to.cat] || {}).label || to.cat;
+  return `<div class="cn-link"><span class="cn-arrow">${linkIconSVG}</span><span class="cn-link-text">${esc(from.owner || 'Owner')} wants<br><b>${esc(wants)}</b></span></div>`;
+}
+
+function renderChainInto(containerEl, path, opts = {}) {
+  const ctx = {
+    haveWords: queryWords(opts.have), needWords: queryWords(opts.need),
+    haveMaterial: opts.match && opts.match.haveMaterial, needMaterial: opts.match && opts.match.needMaterial,
+    needCat: opts.match && opts.match.needCat,
+  };
+  const last = path.length - 1;
   let html = '';
   path.forEach((it, i) => {
-    html += chainNodeHTML(it, i, i === 0);
-    if (i < path.length - 1) html += `<div class="cn-link">${linkIconSVG}</div>`;
+    html += chainNodeHTML(it, i, last, ctx);
+    if (i < last) html += chainLinkHTML(it, path[i + 1]);
   });
-  const hops = path.length - 1;
+  const companies = new Set(path.map(p => p.owner)).size;
+  const first = path[0], end = path[last];
   containerEl.innerHTML = `
+    <div class="chain-summary">
+      <div class="cs-end"><span class="cs-label">You give</span><b>${highlightHTML(first.title, ctx.haveWords)}</b><span class="cs-sub">${esc(first.owner || '')}</span></div>
+      <div class="cs-mid"><span class="cs-hops">${last === 0 ? 'direct match' : plural(last, 'hop')}</span><span class="cs-line"></span><span class="cs-sub">${companies === 1 ? '1 company' : companies + ' companies'}</span></div>
+      <div class="cs-end cs-get"><span class="cs-label">You get</span><b>${highlightHTML(end.title, ctx.needWords)}</b><span class="cs-sub">${esc(end.owner || '')}</span></div>
+    </div>
     <div class="chain-head">
-      <div class="chain-title">Trade chain</div>
-      <div class="chain-count">${hops === 0 ? 'direct match · 1 item' : `${hops} hop${hops === 1 ? '' : 's'} · ${path.length} companies`}</div>
+      <div class="chain-title">Trade chain, step by step</div>
+      <div class="chain-count">${plural(path.length, 'item')} · each company gets what it wants</div>
     </div>
     <div class="chain-track">${html}</div>
     <div class="chain-actions">
@@ -217,19 +274,25 @@ function renderChainInto(containerEl, path) {
         }));
         toast(lines.length ? lines : ['Interest confirmed.']);
       } catch (err) {
-        if (err.status === 401) {
-          toast(['Log in to confirm interest in a trade.']);
-        } else if (err.status === 403) {
-          toast(['Finish verifying your email and adding your company name in Account before confirming a trade.']);
-        } else {
-          toast(['Something went wrong confirming this trade — please try again.']);
-        }
+        if (err.status === 401) toast(['Log in to confirm interest in a trade.']);
+        else if (err.status === 403) toast(['Finish verifying your email and adding your company name in Account before confirming a trade.']);
+        else toast(['Something went wrong confirming this trade — please try again.']);
       } finally {
         btn.disabled = false;
         btn.textContent = 'Confirm interest & start deal';
       }
     };
   }
+  containerEl.classList.add('show');
+}
+
+/** "No chain" / "nothing like that": show the closest listings as cards, not a sentence. */
+function renderSuggestionsInto(containerEl, items, words) {
+  if (!items || !items.length) { containerEl.innerHTML = ''; return; }
+  containerEl.innerHTML = `
+    <div class="chain-head"><div class="chain-title">Closest listings on B2B SWAP</div>
+      <div class="chain-count">contact them directly</div></div>
+    <div class="chain-track">${items.map((it, i) => chainNodeHTML(it, 1, 99, { haveWords: [], needWords: [], midWords: words }).replace('cn-mid', 'cn-mid cn-suggest').replace(`STEP 1`, 'SIMILAR')).join('')}</div>`;
   containerEl.classList.add('show');
 }
 

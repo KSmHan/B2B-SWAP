@@ -22,7 +22,7 @@ router.post('/search', async (req, res) => {
   }
 
   const items = await allListings();
-  const candidates = M.findStartCandidates(items, haveTokens, classify(have));
+  const candidates = M.findStartCandidates(items, M.tokenize(have), classify(have));
   if (candidates.length === 0) {
     const alt = M.suggestSimilar(items, wantTokens.length ? wantTokens : haveTokens);
     return res.json({
@@ -47,6 +47,11 @@ router.post('/search', async (req, res) => {
     status: 'ok',
     hops: path.length - 1,
     chain: path.map(publicListing),
+    // Why the ends matched — lets the page explain the result, not just show it.
+    match: {
+      haveMaterial: classify(have), needMaterial: classify(need),
+      needCat: M.detectCategory(wantTokens),
+    },
   });
 });
 
