@@ -33,7 +33,7 @@ router.post('/search', async (req, res) => {
   }
 
   const start = candidates[0];
-  const path = M.findChain(items, start, wantTokens, M.MAX_HOPS);
+  const { path, alternatives } = M.findChains(items, start, wantTokens, M.MAX_HOPS);
   if (!path) {
     const alt = M.suggestSimilar(items, wantTokens);
     return res.json({
@@ -47,6 +47,12 @@ router.post('/search', async (req, res) => {
     status: 'ok',
     hops: path.length - 1,
     chain: path.map(publicListing),
+    // Other companies offering the same thing, each with its own chain
+    // (null: no chain reaches them yet — contact them directly).
+    alternatives: alternatives.map(a => ({
+      supplier: publicListing(a.item),
+      chain: a.path ? a.path.map(publicListing) : null,
+    })),
     // Why the ends matched — lets the page explain the result, not just show it.
     match: {
       haveMaterial: classify(have), needMaterial: classify(need),

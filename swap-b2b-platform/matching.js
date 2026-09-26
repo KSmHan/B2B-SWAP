@@ -200,6 +200,17 @@ function findStartCandidates(allItems, words, material) {
  * can be followed by any item.
  */
 function findChain(allItems, start, wantTokens, maxHops) {
+  return findChains(allItems, start, wantTokens, maxHops).path;
+}
+
+/**
+ * findChain plus every OTHER supplier of the same thing: when several
+ * companies offer what was asked for, `alternatives` lists one entry per
+ * company ({ item, path }) — `path` is its own shortest chain, or null when no
+ * chain reaches it within `maxHops` (the buyer can still contact them).
+ * "Same thing" = same category as the best match and a match score close to it.
+ */
+function findChains(allItems, start, wantTokens, maxHops, maxAlternatives = 20) {
   const wantCatGeneric = detectCategory(wantTokens);
   const hasWant = wantTokens.length > 0;
   const matchScore = (it) => score(wantTokens, it.tags) + (wantCatGeneric && it.cat === wantCatGeneric ? 1 : 0) + titleScore(wantTokens, it) * 0.5;
@@ -208,38 +219,59 @@ function findChain(allItems, start, wantTokens, maxHops) {
 
   const byCat = {};
   allItems.forEach(it => { if (it.status === 'live') (byCat[it.cat] = byCat[it.cat] || []).push(it); });
-
   const live = allItems.filter(it => it.status === 'live');
+
+  // Breadth-first to the hop limit. Scanning a category (or, for an owner open
+  // to offers, everything) claims all its items at once, so each is scanned once.
   const prev = new Map([[start.id, null]]);
+  const depth = new Map([[start.id, 0]]);
+  const scannedCats = new Set();
   let everythingQueued = false;
+  const found = [];
   let frontier = [start];
   for (let hop = 1; hop <= maxHops && frontier.length; hop++) {
     const next = [];
-    const hits = [];
     for (const cur of frontier) {
-      // An owner with no stated want (uploaded stock lists) is open to offers:
-      // any live item can follow it. Expanding that once covers every such node.
       let pool;
       const cats = cur.wantCats && cur.wantCats.length ? cur.wantCats : (cur.wantCat ? [cur.wantCat] : []);
-      if (cats.length) pool = cats.flatMap(c => byCat[c] || []);
-      else if (!everythingQueued) { pool = live; everythingQueued = true; }
+      if (cats.length) {
+        pool = cats.filter(c => !scannedCats.has(c)).flatMap(c => { scannedCats.add(c); return byCat[c] || []; });
+      } else if (!everythingQueued) { pool = live; everythingQueued = true; }
       else pool = [];
       for (const it of pool) {
         if (prev.has(it.id)) continue;
         prev.set(it.id, cur);
+        depth.set(it.id, hop);
         next.push(it);
-        if (satisfied(it)) hits.push(it);
+        if (satisfied(it)) found.push(it);
       }
-    }
-    if (hits.length) {
-      hits.sort((a, b) => matchScore(b) - matchScore(a));
-      const path = [];
-      for (let n = hits[0]; n; n = prev.get(n.id)) path.unshift(n);
-      return path;
     }
     frontier = next;
   }
-  return null;
+  if (!found.length) return { path: null, alternatives: [] };
+
+  const trace = (it) => { const path = []; for (let n = it; n; n = prev.get(n.id)) path.unshift(n); return path; };
+  // Shortest chain first; among equally short ones the best-matching item wins.
+  const minDepth = depth.get(found[0].id);
+  let best = found[0];
+  for (const it of found) if (depth.get(it.id) === minDepth && matchScore(it) > matchScore(best)) best = it;
+  const path = trace(best);
+  if (!hasWant) return { path, alternatives: [] };
+
+  const bestScore = matchScore(best);
+  const perOwner = new Map();
+  for (const it of live) {
+    if (!it.owner || it.owner === best.owner || it === start) continue;
+    if (it.cat !== best.cat || matchScore(it) < bestScore * 0.75) continue;
+    const d = depth.has(it.id) ? depth.get(it.id) : Infinity;
+    const cur = perOwner.get(it.owner);
+    if (!cur || d < cur.d || (d === cur.d && matchScore(it) > matchScore(cur.it))) perOwner.set(it.owner, { it, d });
+  }
+  const alternatives = [...perOwner.values()]
+    .sort((a, b) => a.d - b.d || matchScore(b.it) - matchScore(a.it))
+    .slice(0, maxAlternatives)
+    .map(({ it, d }) => ({ item: it, path: d === Infinity ? null : trace(it) }));
+  return { path, alternatives };
 }
 function suggestSimilar(allItems, tokens) {
   return allItems
@@ -252,5 +284,5 @@ module.exports = {
   CATS, CAT_ORDER, CASH_RANGES, DOCKS, SPEC_NOTES,
   detectCategory, nextCatFor, tokenize, normalizeWord,
   buildSeedListings, MAX_HOPS,
-  score, findStartCandidates, findChain, suggestSimilar,
+  score, findStartCandidates, findChain, findChains, suggestSimilar,
 };
