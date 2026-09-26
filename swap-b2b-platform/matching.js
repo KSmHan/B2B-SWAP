@@ -266,9 +266,13 @@ function findChains(allItems, start, wantTokens, maxHops, maxAlternatives = 20) 
 
   const trace = (it) => { const path = []; for (let n = it; n; n = prev.get(n.id)) path.unshift(n); return path; };
   // Shortest chain first; among equally short ones the best-matching item wins.
-  const minDepth = depth.get(found[0].id);
-  let best = found[0];
-  for (const it of found) if (depth.get(it.id) === minDepth && matchScore(it) > matchScore(best)) best = it;
+  // A chain that ends at the company you started from is no trade, so another
+  // company's item is preferred whenever one qualifies.
+  const others = found.filter(it => !start.owner || it.owner !== start.owner);
+  const pool = others.length ? others : found;
+  const minDepth = depth.get(pool[0].id);
+  let best = pool[0];
+  for (const it of pool) if (depth.get(it.id) === minDepth && matchScore(it) > matchScore(best)) best = it;
   const path = trace(best);
   if (!hasWant) return { path, alternatives: [] };
 

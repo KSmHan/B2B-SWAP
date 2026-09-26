@@ -184,3 +184,16 @@ test('a request naming only the material prefers the material over veneer / scra
   const start = { id: 'st', title: 'Steel sheet', owner: 'SteelCo', cat: 'metal', wantCat: 'wood', tags: ['steel', 'sheet'], status: 'live' };
   assert.equal(M.findChain([start, ...all], start, M.tokenize('Walnut'), M.MAX_HOPS).at(-1).title, 'Walnut Lumber 4/4');
 });
+
+test('the chain ends at another company when one has the item', () => {
+  const card = (company) => ({ id: company, company, phone: '1', email: company + '@x.co', contactName: 'A' });
+  const rows = (company, base) => [
+    { id: base + 1, category: 'lumber', title: 'Walnut Lumber 4/4' },
+    { id: base + 2, category: 'lumber', title: 'White Oak Lumber 4/4' },
+  ].map(r => stockItemToListing(Object.assign({ card: card(company) }, r)));
+  const all = rows('dexm', 0).concat(rows('Tital', 10));
+  const start = all[0]; // dexm's walnut
+  const { path, alternatives } = M.findChains(all, start, M.tokenize('White Oak Lumber'), M.MAX_HOPS);
+  assert.equal(path.at(-1).owner, 'Tital');
+  assert.deepEqual(alternatives.map(a => a.item.owner), ['dexm']); // still listed
+});
