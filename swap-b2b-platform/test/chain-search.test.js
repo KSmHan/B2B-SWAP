@@ -73,8 +73,7 @@ test('Russian or English "I have / I need" text reaches uploaded rows', async ()
   ]);
 
   // "I have: алюминий" finds the aluminum rows by material type, not by exact word.
-  const have = withMaterialToken('алюминий', M.tokenize('алюминий'));
-  const starts = M.findStartCandidates(all, have);
+  const starts = M.findStartCandidates(all, M.tokenize('алюминий'), 'aluminum');
   assert.ok(starts.length && starts[0].material === 'aluminum');
 
   // "I need: фанера" (plywood) — a chain ends on an uploaded plywood row.
@@ -85,7 +84,7 @@ test('Russian or English "I have / I need" text reaches uploaded rows', async ()
   for (let i = 1; i < chain.length; i++) assert.equal(chain[i].cat, chain[i - 1].wantCat);
 
   // English works the same way.
-  const en = M.findChain(all, M.findStartCandidates(all, withMaterialToken('copper', ['copper']))[0], withMaterialToken('MDF board', M.tokenize('MDF board')), M.MAX_HOPS);
+  const en = M.findChain(all, M.findStartCandidates(all, ['copper'], 'copper')[0], withMaterialToken('MDF board', M.tokenize('MDF board')), M.MAX_HOPS);
   assert.equal(en.at(-1).material, 'mdf');
 });
 
@@ -95,6 +94,14 @@ test('the material named in "I have" outranks look-alike words', async () => {
     { id: 1, category: 'plastic', title: 'Polycarbonate sheet 3mm', card },
     { id: 2, category: 'steel', title: 'Hot-rolled steel plate', card },
   ].map(stockItemToListing);
-  const tokens = withMaterialToken('steel sheet', M.tokenize('steel sheet'));
-  assert.equal(M.findStartCandidates(rows, tokens, 'steel')[0].title, 'Hot-rolled steel plate');
+  assert.equal(M.findStartCandidates(rows, M.tokenize('steel sheet'), 'steel')[0].title, 'Hot-rolled steel plate');
+});
+
+test('a word match beats a same-material look-alike ("HDPE" starts from HDPE, not polycarbonate)', () => {
+  const card = { id: 'c', company: 'X', phone: '1', email: 'x@y.z' };
+  const rows = [
+    stockItemToListing({ id: 1, category: 'plastic', title: 'Polycarbonate sheet 3mm', card }),
+    { id: 'pub', cat: 'plastic', wantCat: 'wood', title: 'HDPE resin pellets', tags: M.tokenize('HDPE resin pellets'), status: 'live' },
+  ];
+  assert.equal(M.findStartCandidates(rows, M.tokenize('HDPE'), 'plastic')[0].title, 'HDPE resin pellets');
 });

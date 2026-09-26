@@ -164,18 +164,23 @@ function score(tokens, itemTokens) {
   tokens.forEach(t => { if (itemTokens.some(it => it.includes(t) || t.includes(it))) s++; });
   return s;
 }
-/** Listings matching what the user has. `material` (lib/materials.js key named in
- *  the request, e.g. "steel") ranks rows of that material above look-alikes
- *  ("steel sheet" → steel plate before polycarbonate sheet). */
-function findStartCandidates(allItems, haveTokens, material) {
+/** Listings matching what the user has, best first. `words` are the request's
+ *  own words and decide the order; `material` (lib/materials.js key named in it,
+ *  e.g. "steel") only breaks ties and lets rows of that material qualify even
+ *  when no word matches ("алюминий" → "Круг 60" on an aluminum sheet tab). */
+function findStartCandidates(allItems, words, material) {
   return allItems
     .filter(it => it.status === 'live')
-    .map(it => ({ it, s: score(haveTokens, it.tags) }))
+    .map(it => {
+      // Same material as requested: an uploaded row of it, or a listing naming it.
+      const sameMaterial = material && (it.material === material || (!it.material && score([material], it.tags) > 0));
+      return { it, s: score(words, it.tags) + (sameMaterial ? 0.5 : 0) };
+    })
     .filter(x => x.s > 0)
-    .map(x => (material && x.it.material === material ? { it: x.it, s: x.s + 2 } : x))
     .sort((a, b) => b.s - a.s)
     .map(x => x.it);
 }
+
 /**
  * Shortest trade chain from `start` to an item that satisfies `wantTokens`,
  * up to `maxHops` hops. Breadth-first over "the owner of A wants B's

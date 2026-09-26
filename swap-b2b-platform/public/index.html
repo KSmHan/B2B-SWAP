@@ -106,20 +106,16 @@ async function askAgent(){
       return;
     }
     if(data.status === 'no_start_match' || data.status === 'no_chain'){
-      const alt = data.suggestions && data.suggestions.length
-        ? ` Similar listings on B2B SWAP: ${data.suggestions.map(a=>`"${a.title}" (${valueText(a)})`).join(', ')}.`
-        : '';
-      answer.textContent = data.message + alt;
+      answer.textContent = data.message + (data.suggestions && data.suggestions.length ? ' Here are the closest listings:' : '');
+      renderSuggestionsInto(chainSection, data.suggestions, queryWords(need || have));
       return;
     }
 
     const path = data.chain;
-    if(path.length === 1){
-      answer.textContent = `"${path[0].title}" already matches what you're after. Price: ${valueText(path[0])}.`;
-    } else {
-      answer.textContent = `Found a chain with ${data.hops} hop${data.hops===1?'':'s'}: you give up "${path[0].title}" (${valueText(path[0])}) → you receive "${path[path.length-1].title}" (${valueText(path[path.length-1])}). Full chain below, with contacts and pickup details.`;
-    }
-    renderChainInto(chainSection, path);
+    answer.textContent = path.length === 1
+      ? 'Direct match — this listing already has what you need.'
+      : `Found a ${path.length - 1}-hop chain: every company in it gets what it wants, and you end up with what you asked for.`;
+    renderChainInto(chainSection, path, { have, need, match: data.match });
   } catch(err){
     answer.classList.remove('thinking');
     answer.textContent = 'Something went wrong reaching the server — please try again in a moment.';
