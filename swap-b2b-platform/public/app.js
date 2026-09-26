@@ -93,6 +93,7 @@ async function renderNav(active) {
   let account = null;
   try { const me = await api('/auth/me'); account = me.account; } catch (e) { /* not logged in */ }
   const items = [
+    ['index.html', 'Start SWAP', 'home'],
     ['how-it-works.html', 'How it works', 'how'],
     ['materials.html', 'My materials', 'materials'],
     ['catalog.html', 'Catalog', 'catalog'],

@@ -25,6 +25,7 @@ header.top{border-bottom:1px solid var(--border-soft);}
 .nav-center{display:flex;gap:36px;position:absolute;left:50%;transform:translateX(-50%);}
 .nav-center a{font-size:14px;color:var(--text);font-weight:500;}
 .nav-center a:hover{color:var(--accent);}
+@media(max-width:1100px){.nav-center{gap:24px;}}
 .top-actions{display:flex;gap:22px;align-items:center;}
 .top-actions .login-link{font-size:14px;font-weight:500;color:var(--text);}
 .top-actions .login-link:hover{color:var(--accent);}
