@@ -385,6 +385,7 @@ footer{border-top:1px solid var(--border-soft);padding:52px 32px 30px;}
 .home-upload{margin-top:22px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border-soft);border-radius:12px;padding:12px 14px;max-width:480px;}
 .home-upload span{font-size:13px;color:var(--text-soft);flex:1;min-width:180px;}
 .home-upload b{color:var(--text);}
+.hero-right .home-upload{margin-top:44px;}
 
 @media(max-width:820px){
   .up-grid{grid-template-columns:1fr;}
