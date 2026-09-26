@@ -174,3 +174,13 @@ test('several suppliers of the same material are all returned', () => {
   // findChain keeps returning just the best chain.
   assert.deepEqual(M.findChain(all, all[0], M.tokenize('White Oak Lumber'), M.MAX_HOPS).map(p => p.id), ['start', 'a1']);
 });
+
+test('a request naming only the material prefers the material over veneer / scrap', () => {
+  const L = (id, title) => ({ id, title, owner: 'Tital', cat: 'wood', tags: M.tokenize(title), status: 'live' });
+  const all = [L('v', 'Walnut Veneer'), L('s', 'Walnut scrap'), L('l', 'Walnut Lumber 4/4')];
+  assert.equal(M.findStartCandidates(all, M.tokenize('Walnut'), null)[0].title, 'Walnut Lumber 4/4');
+  assert.equal(M.findStartCandidates(all, M.tokenize('walnut veneer'), null)[0].title, 'Walnut Veneer');
+  // Same on the "I need" side.
+  const start = { id: 'st', title: 'Steel sheet', owner: 'SteelCo', cat: 'metal', wantCat: 'wood', tags: ['steel', 'sheet'], status: 'live' };
+  assert.equal(M.findChain([start, ...all], start, M.tokenize('Walnut'), M.MAX_HOPS).at(-1).title, 'Walnut Lumber 4/4');
+});
