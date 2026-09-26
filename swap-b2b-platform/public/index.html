@@ -71,6 +71,23 @@
 <script src="app.js"></script>
 <script>
 renderNav('home');
+
+// Side by side, the "Have a stock list?" box starts level with the top of
+// "Find matches", whatever the text wrapping (never closer than 22px to the text).
+function alignUploadBox(){
+  const box = document.querySelector('.hero-right .home-upload');
+  const btn = document.querySelector('.search-box .btn');
+  if(!box || !btn) return;
+  box.style.marginTop = '';
+  if(innerWidth <= 900) return; // stacked on phones: normal spacing
+  const b = btn.getBoundingClientRect(), x = box.getBoundingClientRect();
+  const shift = b.top - x.top;
+  box.style.marginTop = Math.max(22, parseFloat(getComputedStyle(box).marginTop) + shift) + 'px';
+}
+addEventListener('resize', alignUploadBox);
+addEventListener('load', alignUploadBox);
+if(document.fonts) document.fonts.ready.then(alignUploadBox);
+alignUploadBox();
 renderFooter();
 mountCatalogBrowser(document.getElementById('homeBrowser'), { limit: 12 });
 
