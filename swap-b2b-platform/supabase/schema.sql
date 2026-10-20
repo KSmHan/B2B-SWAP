@@ -97,3 +97,13 @@ create table if not exists deals (
 alter table deals enable row level security;
 
 create index if not exists deals_initiator_account_id_idx on deals (initiator_account_id);
+
+-- ---------------- Data API grants ----------------
+-- Supabase no longer grants the API roles access to new tables in "public"
+-- automatically (existing projects: from 2026-10-30), so every table this
+-- file creates is granted explicitly here, in the same script. Only the
+-- server's service role needs access; anon/authenticated get nothing and
+-- RLS (no policies) keeps them out regardless.
+grant select, insert, update, delete on table accounts, verification_codes, listings, deals to service_role;
+grant usage, select on all sequences in schema public to service_role;
+notify pgrst, 'reload schema';
