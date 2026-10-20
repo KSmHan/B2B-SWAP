@@ -31,6 +31,23 @@ This is idempotent (`create table if not exists`), so re-running it later is har
    exists, and a private `stock-files` bucket appears under **Storage**. Also idempotent. This step is
    required for the `/upload.html` page — without it, uploads fail with a 500 in production.
 
+7. **"What do you need in return?" field:** run `supabase/003_stock_card_wants.sql` the same way.
+   Uploads keep working without it, but that field isn't saved until it has run.
+
+> **Grants for new tables.** Supabase no longer gives the Data API roles access to new tables in
+> `public` automatically (for existing projects, from 30 Oct 2026). Every script here grants
+> `service_role` access to the tables it creates, so re-running them on a new project, a preview
+> branch or after `supabase db reset` works. **Any future migration that creates a table must do
+> the same**, in the same file:
+>
+> ```sql
+> grant select, insert, update, delete on table my_new_table to service_role;
+> grant usage, select on all sequences in schema public to service_role;  -- if it has an identity column
+> ```
+>
+> Without it the app gets `permission denied for table my_new_table`. Do not grant `anon` or
+> `authenticated` — the browser never talks to Supabase directly.
+
 ## 3. Collect the credentials the app will need
 
 1. In the dashboard, go to **Project Settings → API**.
